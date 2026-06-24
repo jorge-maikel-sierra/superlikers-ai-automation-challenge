@@ -21,6 +21,12 @@ services:
       - SUPERLIKERS_BASE_URL=${SUPERLIKERS_BASE_URL:-https://api.superlikerslabs.com/v1}
       - SUPERLIKERS_CAMPAIGN=${SUPERLIKERS_CAMPAIGN:-3z}
 
+      # WhatsApp Cloud API
+      - WHATSAPP_TOKEN=${WHATSAPP_TOKEN}
+
+      # Superlikers Activity
+      - SUPERLIKERS_ACTIVITY_ID=${SUPERLIKERS_ACTIVITY_ID}
+
       # AI Provider
       - OPENAI_API_KEY=${OPENAI_API_KEY}
 
