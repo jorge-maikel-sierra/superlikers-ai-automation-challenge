@@ -423,7 +423,7 @@ Form-data con campo `image` (binario de la imagen descargada de WhatsApp)
 | Parámetro | Valor |
 |-----------|-------|
 | **Method** | GET |
-| **URL** | `https://graph.facebook.com/v17.0/{{media_id}}` |
+| **URL** | `https://graph.facebook.com/v21.0/{{media_id}}` |
 | **Headers** | `Authorization: Bearer {{WHATSAPP_TOKEN}}` |
 
 ---
@@ -577,7 +577,7 @@ Form-data con campo `image` (binario de la imagen descargada de WhatsApp)
 | Parámetro | Valor |
 |-----------|-------|
 | **Method** | POST |
-| **URL** | `https://graph.facebook.com/v17.0/{{phone_number_id}}/messages` |
+| **URL** | `https://graph.facebook.com/v21.0/{{phone_number_id}}/messages` |
 | **Headers** | `Authorization: Bearer {{WHATSAPP_TOKEN}}` |
 
 ### Body

@@ -41,7 +41,7 @@ POST /webhook/whatsapp
 
 #### Enviar Mensaje
 ```
-POST https://graph.facebook.com/v17.0/{PHONE_NUMBER_ID}/messages
+POST https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages
 Authorization: Bearer {WHATSAPP_TOKEN}
 Content-Type: application/json
 
