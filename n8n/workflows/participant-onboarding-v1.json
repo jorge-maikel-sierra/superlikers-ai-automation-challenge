@@ -517,7 +517,7 @@
           }
         },
         "sendBinary": true,
-        "binaryPropertyName": "data"
+        "binaryPropertyName": "image"
       },
       "notes": "Uploads ticket image via POST /tickets/upload. Multipart/form-data field 'image' from previous node's binary. Retries 3x exponential backoff. Returns photo_id, url, size_bytes, mime_type.",
       "notesPos": "right"
@@ -842,6 +842,22 @@
         "code": "// Points Builder\n// Builds final FINISHED message with points summary\n\nconst data = $input.first().json;\nconst body = data.body || {};\nconst pointsAwarded = body.points_awarded || 0;\nconst totalPoints = body.total_points || 0;\n\nconst session = data.session ? { ...data.session } : {};\nsession.state = 'FINISHED';\nsession.retry_count = 0;\n\nconst replyMessage = '¡Felicidades! Has completado el proceso.\n\nPuntos ganados en esta compra: ' + pointsAwarded + '\nTotal de puntos acumulados: ' + totalPoints + '\n\nGracias por participar en la promocion de Superlikers. 🎉';\n\nreturn [{\n  json: {\n    ...data,\n    session,\n    points_awarded: pointsAwarded,\n    total_points: totalPoints,\n    action: 'finished',\n    replyMessage: replyMessage\n  }\n}];"
       },
       "notes": "Builds final message with points summary from Accept Entry response. Sets state=FINISHED. Displays points_awarded and total_points.",
+      "notesPos": "right"
+    },
+    {
+      "id": "rename-binary-001",
+      "name": "Rename Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        2850
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// Rename Binary\n// Renames the binary property from \"data\" to \"image\"\n// so the Upload Ticket API sends it with form field name \"image\"\n\nconst items = $input.all();\nreturn items.map(item => {\n  if (item.binary && item.binary.data) {\n    item.binary.image = item.binary.data;\n    delete item.binary.data;\n  }\n  return item;\n});\n"
+      },
+      "notes": "Renames binary property from 'data' to 'image' so Upload Ticket API sends the file with form field name 'image' as required by Superlikers API.",
       "notesPos": "right"
     }
   ],
@@ -1183,7 +1199,7 @@
       "main": [
         [
           {
-            "node": "Upload Ticket API",
+            "node": "Rename Binary",
             "type": "main",
             "index": 0
           }
@@ -1325,6 +1341,17 @@
         [
           {
             "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rename Binary": {
+      "main": [
+        [
+          {
+            "node": "Upload Ticket API",
             "type": "main",
             "index": 0
           }
