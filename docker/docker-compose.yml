@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: superlikers-n8n
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=${N8N_PORT:-5678}
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - N8N_SECURE_COOKIE=false
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678}
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+
+      # Superlikers API
+      - SUPERLIKERS_API_KEY=${SUPERLIKERS_API_KEY}
+      - SUPERLIKERS_BASE_URL=${SUPERLIKERS_BASE_URL:-https://api.superlikerslabs.com/v1}
+      - SUPERLIKERS_CAMPAIGN=${SUPERLIKERS_CAMPAIGN:-3z}
+
+      # AI Provider
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/home/node/.n8n/workflows
+      - ../n8n/workflows:/backup/workflows
+      - ../n8n/credentials:/backup/credentials
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - superlikers-net
+
+volumes:
+  n8n_data:
+    driver: local
+
+networks:
+  superlikers-net:
+    driver: bridge
