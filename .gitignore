@@ -1,0 +1,19 @@
+# Environment
+docker/.env
+
+# n8n
+n8n/credentials/*
+!n8n/credentials/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+docker/data/
