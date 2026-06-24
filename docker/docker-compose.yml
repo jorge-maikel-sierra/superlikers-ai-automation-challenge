@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   n8n:
-    image: docker.n8n.io/n8nio/n8n:latest
+    image: docker.n8n.io/n8nio/n8n:stable
     container_name: superlikers-n8n
     restart: unless-stopped
     ports:
@@ -23,9 +23,12 @@ services:
 
       # AI Provider
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+
+      # MCP Server (Model Context Protocol)
+      - N8N_MCP_ACCESS_ENABLED=${N8N_MCP_ACCESS_ENABLED:-true}
     volumes:
       - n8n_data:/home/node/.n8n
-      - ./n8n/workflows:/home/node/.n8n/workflows
+      - ../n8n/workflows:/home/node/.n8n/workflows
       - ../n8n/workflows:/backup/workflows
       - ../n8n/credentials:/backup/credentials
     healthcheck:
