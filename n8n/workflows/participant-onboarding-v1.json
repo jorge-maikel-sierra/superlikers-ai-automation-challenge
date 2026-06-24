@@ -6,16 +6,20 @@
       "name": "WhatsApp Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "parameters": {
         "path": "webhook/whatsapp",
-        "httpMethods": ["GET", "POST"],
+        "httpMethods": [
+          "GET",
+          "POST"
+        ],
         "options": {
-          "rawBody": true
         },
         "responseMode": "lastNode",
-        "responseData": "allEntries",
-        "options": {}
+        "responseData": "allEntries"
       },
       "notes": "Receives incoming webhooks from WhatsApp Cloud API. GET handles verification challenges; POST processes inbound messages. Responds 200 to everything (lastNode mode sends last node output as response).",
       "notesPos": "right"
@@ -25,7 +29,10 @@
       "name": "Message Parser",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [0, 300],
+      "position": [
+        0,
+        300
+      ],
       "parameters": {
         "language": "javaScript",
         "code": "// WhatsApp Webhook Message Parser\n// Normalizes incoming webhook payload into standard format { phone, message_type, message_body, media_id, is_media, timestamp }\n\nconst rawData = $input.first().json;\n\n// 1) Check for WhatsApp Cloud API GET verification handshake\n// In n8n, GET query params may appear directly or nested under \"query\"\nconst hubMode = rawData.hub?.mode || rawData.query?.hub?.mode || '';\nconst hubToken = rawData.hub?.['verify_token'] || rawData.query?.hub?.['verify_token'] || '';\nconst hubChallenge = rawData.hub?.challenge || rawData.query?.hub?.challenge || '';\n\nif (hubMode === 'subscribe') {\n  const expectedToken = process.env.WHATSAPP_VERIFY_TOKEN || '';\n  const verified = hubToken === expectedToken;\n  return [\n    {\n      json: {\n        isVerification: true,\n        verified: verified,\n        challenge: verified ? hubChallenge : 'Verification failed - token mismatch'\n      }\n    }\n  ];\n}\n\n// 2) Check for POST with WhatsApp message payload\nif (rawData.entry && Array.isArray(rawData.entry) && rawData.entry.length > 0) {\n  const entry = rawData.entry[0];\n  if (entry.changes && Array.isArray(entry.changes) && entry.changes.length > 0) {\n    const change = entry.changes[0];\n    const value = change.value || {};\n\n    // Discard status updates (no messages array)\n    if (!value.messages || !Array.isArray(value.messages) || value.messages.length === 0) {\n      return [\n        {\n          json: {\n            isStatusUpdate: true\n          }\n        }\n      ];\n    }\n\n    const msg = value.messages[0];\n    const contact = value.contacts && value.contacts.length > 0 ? value.contacts[0] : null;\n    const messageType = msg.type || 'text';\n\n    // Extract message body based on type\n    let messageBody = '';\n    let mediaId = '';\n\n    if (messageType === 'text' && msg.text) {\n      messageBody = msg.text.body || '';\n    } else if (messageType === 'image' && msg.image) {\n      messageBody = msg.image.caption || '';\n      mediaId = msg.image.id || '';\n    } else if (messageType === 'document' && msg.document) {\n      messageBody = msg.document.caption || '';\n      mediaId = msg.document.id || '';\n    } else if (messageType === 'audio' && msg.audio) {\n      mediaId = msg.audio.id || '';\n    } else if (messageType === 'video' && msg.video) {\n      mediaId = msg.video.id || '';\n    }\n\n    return [\n      {\n        json: {\n          isVerification: false,\n          isStatusUpdate: false,\n          phone: msg.from || '',\n          message_type: messageType,\n          message_body: messageBody,\n          media_id: mediaId,\n          is_media: messageType !== 'text',\n          message_id: msg.id || '',\n          timestamp: msg.timestamp || String(Math.floor(Date.now() / 1000)),\n          profile_name: contact ? contact.profile?.name || '' : ''\n        }\n      }\n    ];\n  }\n}\n\n// 3) Unknown payload format — treat as status update to avoid errors\nreturn [\n  {\n    json: {\n      isStatusUpdate: true\n    }\n  }\n];\n"
@@ -38,10 +45,13 @@
       "name": "Session Manager",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [0, 600],
+      "position": [
+        0,
+        600
+      ],
       "parameters": {
         "language": "javaScript",
-        "code": "// Session Manager\n// Reads/writes sessions via n8n Data Store ($dataStore)\n// Key: session:{phone}, TTL: 1800 (30 minutes)\n// Creates new session with state:START if none exists\n// If expired (30min) → delete and re-create\n\nconst data = $input.first().json;\n\n// Pass through verification and status updates (no session needed)\nif (data.isVerification) {\n  return [{ json: { ...data, session: null } }];\n}\nif (data.isStatusUpdate) {\n  return [{ json: { ...data, session: null } }];\n}\n\nconst phone = data.phone;\nif (!phone) {\n  return [{ json: { ...data, session: null, error: 'No phone number provided' } }];\n}\n\nconst sessionKey = `session:${phone}`;\n\n// Try to load existing session from Data Store\nlet session = null;\ntry {\n  session = await $dataStore.get(sessionKey);\n} catch (e) {\n  // Data Store unavailable or key doesn't exist\n  session = null;\n}\n\nconst now = new Date();\n\n// If session exists, check expiry (30 minutes)\nif (session) {\n  const updatedAt = new Date(session.updated_at).getTime();\n  const thirtyMinutesAgo = now.getTime() - (30 * 60 * 1000);\n\n  if (updatedAt < thirtyMinutesAgo) {\n    // Session expired — delete and re-create\n    try {\n      await $dataStore.delete(sessionKey);\n    } catch (e) {\n      // Ignore deletion errors\n    }\n    session = null;\n  }\n}\n\n// Create new session if none exists or was expired\nif (!session) {\n  session = {\n    phone: phone,\n    name: '',\n    email: '',\n    state: 'START',\n    participant_id: '',\n    retry_count: 0,\n    created_at: now.toISOString(),\n    updated_at: now.toISOString()\n  };\n\n  try {\n    await $dataStore.set(sessionKey, session, { ttl: 1800 });\n  } catch (e) {\n    console.error('Failed to create session:', e);\n  }\n} else {\n  // Update timestamp to keep session alive\n  session.updated_at = now.toISOString();\n  try {\n    await $dataStore.set(sessionKey, session, { ttl: 1800 });\n  } catch (e) {\n    console.error('Failed to update session:', e);\n  }\n}\n\nreturn [\n  {\n    json: {\n      ...data,\n      session: session,\n      sessionKey: sessionKey\n    }\n  }\n];\n"
+        "code": "// Session Manager\n// Reads/writes sessions via n8n Data Store ($dataStore)\n// Key: session:{phone}, TTL: 1800 (30 minutes)\n// Creates new session with state:START if none exists\n// If expired (30min) → delete and re-create\n\nconst data = $input.first().json;\n\n// Pass through verification and status updates (no session needed)\nif (data.isVerification) {\n  return [{ json: { ...data, session: null } }];\n}\nif (data.isStatusUpdate) {\n  return [{ json: { ...data, session: null } }];\n}\n\nconst phone = data.phone;\nif (!phone) {\n  return [{ json: { ...data, session: null, error: 'No phone number provided' } }];\n}\n\nconst sessionKey = `session:${phone}`;\n\n// Try to load existing session from Data Store\nlet session = null;\ntry {\n  session = await $dataStore.get(sessionKey);\n} catch (e) {\n  // Data Store unavailable or key doesn't exist\n  session = null;\n}\n\nconst now = new Date();\n\n// If session exists, check expiry (30 minutes)\nif (session) {\n  const updatedAt = new Date(session.updated_at).getTime();\n  const thirtyMinutesAgo = now.getTime() - (30 * 60 * 1000);\n\n  if (updatedAt < thirtyMinutesAgo) {\n    // Session expired — delete and re-create\n    try {\n      await $dataStore.delete(sessionKey);\n    } catch (e) {\n      // Ignore deletion errors\n    }\n    session = null;\n  }\n}\n\n// Create new session if none exists or was expired\nif (!session) {\n  session = {\n    phone: phone,\n    name: '',\n    email: '',\n    state: 'START',\n    participant_id: '',\n    photo_id: '',\n    photo_url: '',\ninvoice_data: {},\npurchase_id: '',\nentry_id: '',\npoints_earned: 0,\npoints_awarded: 0,\ntotal_points: 0,\n\n    retry_count: 0,\n    created_at: now.toISOString(),\n    updated_at: now.toISOString()\n  };\n\n  try {\n    await $dataStore.set(sessionKey, session, { ttl: 1800 });\n  } catch (e) {\n    console.error('Failed to create session:', e);\n  }\n} else {\n  // Update timestamp to keep session alive\n  session.updated_at = now.toISOString();\n  try {\n    await $dataStore.set(sessionKey, session, { ttl: 1800 });\n  } catch (e) {\n    console.error('Failed to update session:', e);\n  }\n}\n\nreturn [\n  {\n    json: {\n      ...data,\n      session: session,\n      sessionKey: sessionKey\n    }\n  }\n];\n"
       },
       "notes": "Loads or creates session from n8n Data Store. Key format: session:{phone}. Creates new session with state=START if not found. Deletes expired sessions (>30min) and re-creates. TTL: 1800s.",
       "notesPos": "right"
@@ -51,7 +61,10 @@
       "name": "State Router",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 2,
-      "position": [0, 900],
+      "position": [
+        0,
+        900
+      ],
       "parameters": {
         "dataType": "string",
         "mode": "rules",
@@ -86,12 +99,52 @@
               "value1": "={{ $json.session === null ? '' : $json.session.state }}",
               "operation": "equal",
               "value2": "SEARCH_PARTICIPANT"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "REGISTER_PARTICIPANT"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "WAIT_TICKET"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "UPLOAD_TICKET"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "PROCESS_INVOICE"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "REGISTER_PURCHASE"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "ACCEPT_ENTRY"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "FINISHED"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "ERROR"
             }
           ]
         },
-        "fallbackOutput": "6"
+        "fallbackOutput": 14
       },
-      "notes": "Routes messages by session.state. Output 0=START, 1=WAIT_PHONE, 2=WAIT_NAME, 3=WAIT_EMAIL, 4=WAIT_CONFIRMATION, 5=SEARCH_PARTICIPANT, 6=default (error/unknown state). Uses Switch node for visual branching — not code if/else.",
+      "notes": "Routes messages by session.state. Output 0=START, 1=WAIT_PHONE, 2=WAIT_NAME, 3=WAIT_EMAIL, 4=WAIT_CONFIRMATION, 5=SEARCH_PARTICIPANT, 6=REGISTER_PARTICIPANT, 7=WAIT_TICKET, 8=UPLOAD_TICKET, 9=PROCESS_INVOICE, 10=REGISTER_PURCHASE, 11=ACCEPT_ENTRY, 12=FINISHED, 13=ERROR, 14=default (unrecognized state).",
       "notesPos": "right"
     },
     {
@@ -99,7 +152,10 @@
       "name": "Welcome Handler",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [0, 1200],
+      "position": [
+        0,
+        1200
+      ],
       "parameters": {
         "language": "javaScript",
         "code": "// Welcome Handler\n// START state: send welcome message and transition to WAIT_PHONE\n\nconst data = $input.first().json;\n\nif (!data.session) {\n  return [{ json: { ...data, replyMessage: '', action: 'noop' } }];\n}\n\n// Update session: state → WAIT_PHONE, reset retry\nconst session = { ...data.session };\nsession.state = 'WAIT_PHONE';\nsession.retry_count = 0;\nsession.updated_at = new Date().toISOString();\n\nreturn [\n  {\n    json: {\n      ...data,\n      session: session,\n      replyMessage: 'Bienvenido a Superlikers. Para participar en nuestra promocion, por favor indica tu numero de telefono a 10 digitos.',\n      action: 'welcome'\n    }\n  }\n];\n"
@@ -112,7 +168,10 @@
       "name": "Phone Validator",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, 300],
+      "position": [
+        400,
+        300
+      ],
       "parameters": {
         "language": "javaScript",
         "code": "// Phone Validator\n// Output 0: valid phone number → continues to Search Participant\n// Output 1: invalid phone number → routes to error handling\n// Validates: 10 digits (Colombia), strips non-numeric, normalizes with COUNTRY_CODE prefix\n\nconst COUNTRY_CODE = process.env.COUNTRY_CODE || '57';\nconst PHONE_DIGITS = parseInt(process.env.PHONE_DIGITS || '10', 10);\n\nconst data = $input.first().json;\nlet rawPhone = data.message_body || '';\n\n// Strip all non-numeric characters\nconst digits = rawPhone.replace(/\\D/g, '');\n\nif (digits.length !== PHONE_DIGITS) {\n  // INVALID — output 1\n  return [\n    [],\n    [\n      {\n        json: {\n          ...data,\n          valid: false,\n          phone: null,\n          normalizedPhone: null,\n          error: `El numero debe tener exactamente ${PHONE_DIGITS} digitos. Recibimos ${digits.length} digitos. Intenta de nuevo.`\n        }\n      }\n    ]\n  ];\n}\n\n// VALID — output 0\nconst normalizedPhone = `+${COUNTRY_CODE}${digits}`;\n\nreturn [\n  [\n    {\n      json: {\n        ...data,\n        valid: true,\n        phone: normalizedPhone,\n        normalizedPhone: normalizedPhone,\n        rawInput: rawPhone\n      }\n    }\n  ],\n  []\n];\n"
@@ -125,7 +184,10 @@
       "name": "Search Participant",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 2,
-      "position": [400, 600],
+      "position": [
+        400,
+        600
+      ],
       "parameters": {
         "method": "GET",
         "url": "={{ $env.SUPERLIKERS_BASE_URL }}/campaigns/{{ $env.SUPERLIKERS_CAMPAIGN }}/participants/search",
@@ -168,7 +230,10 @@
       "name": "Participant Exists",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 2,
-      "position": [400, 900],
+      "position": [
+        400,
+        900
+      ],
       "parameters": {
         "dataType": "number",
         "mode": "rules",
@@ -196,12 +261,15 @@
       "name": "Session Update",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, 1200],
+      "position": [
+        400,
+        1200
+      ],
       "parameters": {
         "language": "javaScript",
-        "code": "// Session Update\n// Applies partial updates to session and persists to Data Store\n// Resets retry_count on state change\n// Saves with TTL 1800\n\nconst data = $input.first().json;\n\n// Pass through verification and status updates\nif (data.isVerification || data.isStatusUpdate) {\n  return [{ json: data }];\n}\n\nlet session = data.session ? { ...data.session } : null;\nif (!session) {\n  return [{ json: data }];\n}\n\nconst phone = data.normalizedPhone || data.phone || session.phone || '';\nconst sessionKey = `session:${phone}`;\n\n// Determine what updates to apply based on action + context\nconst previousState = session.state;\n\nif (data.action === 'welcome') {\n  // Welcome Handler already updated state to WAIT_PHONE — persist\n} else if (data.valid === false) {\n  // Phone validation failed — increment retry, keep current state\n  session.retry_count = (session.retry_count || 0) + 1;\n} else if (data.valid === true && phone) {\n  // Phone validated successfully — update phone, stay in current state\n  session.phone = phone;\n  // State changes happen AFTER the HTTP search, not here\n} else if (data.statusCode === 200 && data.body) {\n  // Participant found via API\n  const participant = typeof data.body === 'object' ? data.body : {};\n  session.state = 'WAIT_TICKET';\n  session.retry_count = 0;\n  session.participant_id = participant.id || participant.participant_id || '';\n  session.name = participant.name || '';\n  session.email = participant.email || '';\n  session.phone = phone || session.phone;\n} else if (data.statusCode === 404) {\n  // Participant not found — proceed to registration flow\n  session.state = 'WAIT_NAME';\n  session.retry_count = 0;\n} else if (data.statusCode >= 400) {\n  // API error (500, 429, etc.) — increment retry, keep state\n  session.retry_count = (session.retry_count || 0) + 1;\n}\n\n// Reset retry_count on state change\nif (session.state !== previousState && previousState) {\n  session.retry_count = 0;\n}\n\n// Always update timestamp\nsession.updated_at = new Date().toISOString();\n\n// Persist to Data Store\nif (phone) {\n  try {\n    await $dataStore.set(sessionKey, session, { ttl: 1800 });\n  } catch (e) {\n    console.error('Failed to update session in Data Store:', e);\n  }\n}\n\nreturn [\n  {\n    json: {\n      ...data,\n      session: session\n    }\n  }\n];\n"
+        "code": "// Session Update\n// Applies partial updates to session and persists to Data Store\n// Resets retry_count on state change\n// Saves with TTL 1800\n\nconst data = $input.first().json;\n\n// Pass through verification and status updates\nif (data.isVerification || data.isStatusUpdate) {\n  return [{ json: data }];\n}\n\nlet session = data.session ? { ...data.session } : null;\nif (!session) {\n  return [{ json: data }];\n}\n\nconst phone = data.normalizedPhone || data.phone || session.phone || '';\nconst sessionKey = `session:${phone}`;\n\n// Determine what updates to apply based on action + context\nconst previousState = session.state;\n\nif (data.action === 'welcome') {\n  // Welcome Handler already updated state to WAIT_PHONE — persist\n} else if (data.valid === false) {\n  // Phone validation failed — increment retry, keep current state\n  session.retry_count = (session.retry_count || 0) + 1;\n} else if (data.valid === true && phone) {\n  // Phone validated successfully — update phone, stay in current state\n  session.phone = phone;\n  // State changes happen AFTER the HTTP search, not here\n  } else if (data.statusCode === 200 && data.body && data.body.photo_id) {\n    // Ticket upload success\n    const result = typeof data.body === 'object' ? data.body : {};\n    session.photo_id = result.photo_id || '';\n    session.photo_url = result.url || '';\n    session.state = 'UPLOAD_TICKET';\n    session.retry_count = 0;\n  } else if (data.statusCode === 200 && data.body) {\n  // Participant found via API\n  const participant = typeof data.body === 'object' ? data.body : {};\n  session.state = 'WAIT_TICKET';\n  session.retry_count = 0;\n  session.participant_id = participant.id || participant.participant_id || '';\n  session.name = participant.name || '';\n  session.email = participant.email || '';\n  session.phone = phone || session.phone;\n} else if (data.statusCode === 404) {\n  // Participant not found — proceed to registration flow\n  session.state = 'WAIT_NAME';\n  session.retry_count = 0;\n} else if (data.statusCode >= 400) {\n  // API error (500, 429, etc.) — increment retry, keep state\n  session.retry_count = (session.retry_count || 0) + 1;\n} else if (data.action === 'name_captured') {\n  // Name captured — store name, transition to WAIT_EMAIL\n  session.name = data.name || '';\n  session.state = 'WAIT_EMAIL';\n} else if (data.action === 'email_captured') {\n  // Email captured — store email, transition to WAIT_CONFIRMATION\n  session.email = data.email || '';\n  session.state = 'WAIT_CONFIRMATION';\n} else if (data.action === 'confirmed') {\n  // User confirmed data — proceed to registration\n  session.state = 'REGISTER_PARTICIPANT';\n} else if (data.action === 'cancelled') {\n  // User cancelled — reset registration data, go back to WAIT_NAME\n  session.state = 'WAIT_NAME';\n  session.name = '';\n  session.email = '';\n  session.retry_count = 0;\n} else if (data.statusCode === 201 && data.body && data.body.purchase_id) {\n  // Purchase registered successfully\n  session.purchase_id = data.body.purchase_id;\n  session.points_earned = data.body.points_earned || 0;\n  session.state = 'REGISTER_PURCHASE';\n} else if (data.statusCode === 201 && data.body) {\n  // Participant created successfully via API\n  const participant = typeof data.body === 'object' ? data.body : {};\n  session.state = 'WAIT_TICKET';\n  session.retry_count = 0;\n  session.participant_id = participant.id || participant.participant_id || '';\n  session.name = participant.name || session.name || '';\n  session.email = participant.email || session.email || '';\n  session.phone = participant.phone || session.phone || '';\n  session.replyMessage = data.replyMessage || 'Registrado exitosamente. Ahora envia una foto de tu ticket.';\n}\n\n\n} else if (data.action === 'invoice_valid' && data.invoice_data) {\n  // Invoice extracted successfully\n  session.invoice_data = data.invoice_data;\n  session.state = 'PROCESS_INVOICE';\n} else if (data.action === 'invoice_invalid') {\n  // Invoice extraction failed — retry\n  session.state = 'WAIT_TICKET';\n  session.retry_count = (session.retry_count || 0) + 1;\n} else if (data.statusCode === 409 && data.body && data.body.existing_purchase_id) {\n  // Duplicate purchase — use existing_purchase_id\n  session.purchase_id = data.body.existing_purchase_id;\n  session.state = 'REGISTER_PURCHASE';\n} else if (data.statusCode === 200 && data.body && data.body.entry_id) {\n  // Entry accepted — store points\n  session.entry_id = data.body.entry_id;\n  session.points_awarded = data.body.points_awarded || 0;\n  session.total_points = data.body.total_points || 0;\n  session.state = 'ACCEPT_ENTRY';\n} else if (data.action === 'finished') {\n  // Pipeline complete\n  session.state = 'FINISHED';\n\n// Reset retry_count on state change\nif (session.state !== previousState && previousState) {\n  session.retry_count = 0;\n}\n\n// Always update timestamp\nsession.updated_at = new Date().toISOString();\n\n// Persist to Data Store\nif (phone) {\n  try {\n    await $dataStore.set(sessionKey, session, { ttl: 1800 });\n  } catch (e) {\n    console.error('Failed to update session in Data Store:', e);\n  }\n}\n\nreturn [\n  {\n    json: {\n      ...data,\n      session: session\n    }\n  }\n];\n"
       },
-      "notes": "Applies partial updates to session based on the current action: phone validation result, participant search result (200=found/404=not found/error), or welcome transition. Resets retry_count on state change. Persists to Data Store with TTL 1800.",
+      "notes": "Applies partial updates to session based on the current action: welcome, phone validation (valid/invalid), participant search (200/404/error), registration flow (name_captured, email_captured, confirmed, cancelled), or participant creation (201). Resets retry_count on state change. Persists to Data Store with TTL 1800.",
       "notesPos": "right"
     },
     {
@@ -209,12 +277,571 @@
       "name": "Message Builder",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, 1500],
+      "position": [
+        400,
+        1500
+      ],
       "parameters": {
         "language": "javaScript",
-        "code": "// Message Builder\n// Builds WhatsApp message payload from the current state and context\n// Returns: { to, type, text: { body } }\n// This is the last node in the chain — its output becomes the webhook response\n\nconst data = $input.first().json;\n\n// 1) Handle GET verification — return challenge as plain text response\nif (data.isVerification) {\n  return [\n    {\n      json: {\n        to: '',\n        type: 'text',\n        text: {\n          body: data.challenge || 'Verification failed'\n        }\n      }\n    }\n  ];\n}\n\n// 2) Handle status updates — return empty 200\nif (data.isStatusUpdate) {\n  return [\n    {\n      json: {\n        to: '',\n        type: 'none',\n        text: {\n          body: 'ok'\n        }\n      }\n    }\n  ];\n}\n\nconst phone = data.normalizedPhone || data.phone || '';\nconst session = data.session || {};\n\n// 3) Use explicit replyMessage if set by a handler\nlet replyBody = data.replyMessage || '';\n\n// 4) If no replyMessage was set, generate based on session state\nif (!replyBody && session.state) {\n  switch (session.state) {\n    case 'WAIT_PHONE':\n      replyBody = 'Por favor indica tu numero de telefono a 10 digitos.';\n      break;\n    case 'WAIT_NAME':\n      replyBody = 'No encontramos tu registro. Por favor indicame tu nombre completo.';\n      break;\n    case 'WAIT_EMAIL':\n      replyBody = 'Gracias. Ahora indicame tu correo electronico.';\n      break;\n    case 'WAIT_CONFIRMATION':\n      replyBody = 'Confirma que los datos ingresados son correctos. Responde Si o No.';\n      break;\n    case 'WAIT_TICKET':\n      replyBody = 'Ya encontramos tu registro. Ahora enviame una foto de tu ticket.';\n      break;\n    default:\n      replyBody = 'Gracias por tu mensaje. Te responderemos pronto.';\n  }\n}\n\n// 5) If there was an error (phone validation, etc.), use it\nif (!replyBody && data.error) {\n  replyBody = data.error;\n}\n\nreturn [\n  {\n    json: {\n      to: phone,\n      type: 'text',\n      text: {\n        body: replyBody || 'Gracias por tu mensaje. Te responderemos pronto.'\n      }\n    }\n  }\n];\n"
+        "code": "// Message Builder\n// Builds WhatsApp message payload from the current state and context\n// Returns: { to, type, text: { body } }\n// This is the last node in the chain — its output becomes the webhook response\n\nconst data = $input.first().json;\n\n// 1) Handle GET verification — return challenge as plain text response\nif (data.isVerification) {\n  return [\n    {\n      json: {\n        to: '',\n        type: 'text',\n        text: {\n          body: data.challenge || 'Verification failed'\n        }\n      }\n    }\n  ];\n}\n\n// 2) Handle status updates — return empty 200\nif (data.isStatusUpdate) {\n  return [\n    {\n      json: {\n        to: '',\n        type: 'none',\n        text: {\n          body: 'ok'\n        }\n      }\n    }\n  ];\n}\n\nconst phone = data.normalizedPhone || data.phone || '';\nconst session = data.session || {};\n\n// 3) Use explicit replyMessage if set by a handler\nlet replyBody = data.replyMessage || '';\n\n// 4) If no replyMessage was set, generate based on session state\nif (!replyBody && session.state) {\n  switch (session.state) {\n    case 'WAIT_PHONE':\n      replyBody = 'Por favor indica tu numero de telefono a 10 digitos.';\n      break;\n    case 'WAIT_NAME':\n      replyBody = 'No encontramos tu registro. Por favor indicame tu nombre completo.';\n      break;\n    case 'WAIT_EMAIL':\n      replyBody = 'Gracias. Ahora indicame tu correo electronico.';\n      break;\n    case 'WAIT_CONFIRMATION':\n      replyBody = `Confirma que tus datos son correctos:\\nNombre: ${session.name || ''}\\nEmail: ${session.email || ''}\\n\\nResponde Si o No.`;\n      break;\n    case 'UPLOAD_TICKET':\n      replyBody = 'Gracias, hemos recibido tu foto de ticket. Estamos procesando la informacion...';\n      break;\n\n    case 'WAIT_TICKET':\n      replyBody = 'Ya encontramos tu registro. Por favor enviame una foto de tu ticket de compra. Solo aceptamos imagenes en formato JPEG o PNG.';\n      break;\n    case 'PROCESS_INVOICE':\n  replyBody = 'Estamos procesando la informacion de tu ticket...';\n  break;\ncase 'REGISTER_PURCHASE':\n  replyBody = 'Registrando tu compra...';\n  break;\ncase 'ACCEPT_ENTRY':\n  replyBody = 'Confirmando tu participacion...';\n  break;\ncase 'FINISHED':\n  replyBody = data.replyMessage || 'Proceso completado. Gracias por participar.';\n  break;\ncase 'ERROR':\n  replyBody = data.replyMessage || 'Ocurrio un error. Por favor intenta de nuevo.';\n  break;\n    default:\n      replyBody = 'Gracias por tu mensaje. Te responderemos pronto.';\n  }\n}\n\n// 5) If there was an error (phone validation, etc.), use it\nif (!replyBody && data.error) {\n  replyBody = data.error;\n}\n\nreturn [\n  {\n    json: {\n      to: phone,\n      type: 'text',\n      text: {\n        body: replyBody || 'Gracias por tu mensaje. Te responderemos pronto.'\n      }\n    }\n  }\n];\n"
       },
       "notes": "Builds the WhatsApp message payload based on session state and context. Handles: GET verification (returns challenge), status updates (returns 'ok'), handler replyMessage, state-based auto-replies, and error messages. Output format: { to, type, text: { body } }.",
+      "notesPos": "right"
+    },
+    {
+      "id": "name-handler-001",
+      "name": "Name Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1500
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// Name Handler\n// Captures user's name, validates, transitions to WAIT_EMAIL\n// Output 0: valid name\n// Output 1: invalid name\n\nconst data = $input.first().json;\nconst name = (data.message_body || '').trim();\n\n// Validate: min 3 chars, only letters and spaces (incl. accents)\nconst validName = /^[a-zA-Z\\\\u00E0-\\\\u00FC\\\\u00D1\\\\u00F1\\\\s]+$/.test(name);\n\nif (!name || name.length < 3 || !validName) {\n  // Invalid name — output 1: stay in WAIT_NAME\n  const session = data.session ? {...data.session} : {};\n  session.retry_count = (session.retry_count || 0) + 1;\n  return [\n    [],\n    [{\n      json: {\n        ...data,\n        session,\n        action: 'invalid_name',\n        replyMessage: 'Por favor ingresa un nombre valido (minimo 3 caracteres, solo letras y espacios).'\n      }\n    }]\n  ];\n}\n\n// Valid name — output 0: transition to WAIT_EMAIL\nconst session = data.session ? {...data.session} : {};\nsession.name = name;\nsession.state = 'WAIT_EMAIL';\nsession.retry_count = 0;\n\nreturn [\n  [{\n    json: {\n      ...data,\n      session,\n      name,\n      action: 'name_captured',\n      replyMessage: `Gracias ${name}. Ahora indicame tu correo electronico.`\n    }\n  }],\n  []\n];\n"
+      },
+      "notes": "Captures user's name. Validates: min 3 chars, only letters and spaces. Output 0=valid (name_captured, WAIT_EMAIL), Output 1=invalid (stay WAIT_NAME, error reply).",
+      "notesPos": "right"
+    },
+    {
+      "id": "email-validator-001",
+      "name": "Email Validator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1800
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// Email Validator\n// Captures user's email, validates format, transitions to WAIT_CONFIRMATION\n// Output 0: valid email\n// Output 1: invalid email\n\nconst data = $input.first().json;\nconst email = (data.message_body || '').trim().toLowerCase();\n\n// Validate email format\nconst emailRegex = /^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/;\n\nif (!email || !emailRegex.test(email)) {\n  // Invalid email — output 1: stay in WAIT_EMAIL\n  const session = data.session ? {...data.session} : {};\n  session.retry_count = (session.retry_count || 0) + 1;\n  return [\n    [],\n    [{\n      json: {\n        ...data,\n        session,\n        action: 'invalid_email',\n        replyMessage: 'El correo ingresado no es valido. Por favor ingresa un correo electronico valido (ejemplo: nombre@correo.com).'\n      }\n    }]\n  ];\n}\n\n// Valid email — output 0: transition to WAIT_CONFIRMATION with summary\nconst session = data.session ? {...data.session} : {};\nsession.email = email;\nsession.state = 'WAIT_CONFIRMATION';\nsession.retry_count = 0;\n\nreturn [\n  [{\n    json: {\n      ...data,\n      session,\n      email,\n      action: 'email_captured',\n      replyMessage: `Confirma que tus datos son correctos:\\\\nNombre: ${session.name || ''}\\\\nEmail: ${email}\\\\n\\\\nResponde Si o No.`\n    }\n  }],\n  []\n];\n"
+      },
+      "notes": "Validates email format. Output 0=valid (email_captured, WAIT_CONFIRMATION with name+email summary), Output 1=invalid (stay WAIT_EMAIL, error reply).",
+      "notesPos": "right"
+    },
+    {
+      "id": "confirmation-handler-001",
+      "name": "Confirmation Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        2100
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// Confirmation Handler\n// Parses user response (Sí/No) at WAIT_CONFIRMATION\n// Output 0: Sí → REGISTER_PARTICIPANT\n// Output 1: No → reset to WAIT_NAME\n// Output 2: fallback → stay WAIT_CONFIRMATION\n\nconst data = $input.first().json;\nconst response = (data.message_body || '').trim().toLowerCase();\n\nconst yesVariants = ['sí', 'si', 'yes', 'dale', 'ok', 'confirmo', 'confirmar', 'correcto'];\nconst noVariants = ['no', 'nop', 'cancelar', 'cancel', 'cancelar registro'];\n\nlet session = data.session ? {...data.session} : {};\n\nif (yesVariants.includes(response)) {\n  // Sí — output 0: proceed to registration\n  session.state = 'REGISTER_PARTICIPANT';\n  session.retry_count = 0;\n  return [\n    [{\n      json: {\n        ...data,\n        session,\n        action: 'confirmed',\n        replyMessage: 'Gracias. Estamos registrando tus datos...'\n      }\n    }],\n    [],\n    []\n  ];\n}\n\nif (noVariants.includes(response)) {\n  // No — output 1: reset to WAIT_NAME, clear data\n  session.state = 'WAIT_NAME';\n  session.name = '';\n  session.email = '';\n  session.retry_count = 0;\n  return [\n    [],\n    [{\n      json: {\n        ...data,\n        session,\n        action: 'cancelled',\n        replyMessage: 'OK, empecemos de nuevo. Por favor indicame tu nombre completo.'\n      }\n    }],\n    []\n  ];\n}\n\n// Unrecognized — output 2: stay WAIT_CONFIRMATION, retry prompt\nsession.retry_count = (session.retry_count || 0) + 1;\nreturn [\n  [],\n  [],\n  [{\n    json: {\n      ...data,\n      session,\n      action: 'unclear_confirmation',\n      replyMessage: `No entendi tu respuesta. Responde Si si los datos son correctos, o No para reiniciar.\\\\n\\\\nNombre: ${session.name || ''}\\\\nEmail: ${session.email || ''}`\n    }\n  }]\n];\n"
+      },
+      "notes": "Parses user confirmation (Sí/No). Output 0=Sí (REGISTER_PARTICIPANT), Output 1=No (reset to WAIT_NAME, clear name+email), Output 2=fallback (stay WAIT_CONFIRMATION, retry).",
+      "notesPos": "right"
+    },
+    {
+      "id": "register-participant-001",
+      "name": "Register Participant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        400,
+        1800
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPERLIKERS_BASE_URL }}/campaigns/{{ $env.SUPERLIKERS_CAMPAIGN }}/participants",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.SUPERLIKERS_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "={{ $json.session.phone }}"
+            },
+            {
+              "name": "name",
+              "value": "={{ $json.session.name }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.session.email }}"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "retries": 3,
+            "wait": 1000,
+            "multiplier": 2
+          },
+          "response": {
+            "responseFormat": "json",
+            "outputResponse": "response"
+          }
+        }
+      },
+      "notes": "POST to create new participant in Superlikers. Body: { phone, name, email } with X-API-Key auth. Retries 3x exponential. Output includes statusCode and body for routing.",
+      "notesPos": "right"
+    },
+    {
+      "id": "registration-result-001",
+      "name": "Registration Result",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [
+        400,
+        2100
+      ],
+      "parameters": {
+        "dataType": "number",
+        "mode": "rules",
+        "rules": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 201
+            },
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "gte",
+              "value2": 400
+            }
+          ]
+        },
+        "fallbackOutput": "2"
+      },
+      "notes": "Routes registration result. Output 0=201 (success → WAIT_TICKET via Session Update), Output 1=4xx/5xx (error → retry via Session Update), Output 2=fallback (network error → Session Update).",
+      "notesPos": "right"
+    },
+    {
+      "id": "wait-ticket-router-001",
+      "name": "WAIT_TICKET Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [
+        0,
+        2400
+      ],
+      "parameters": {
+        "dataType": "string",
+        "mode": "rules",
+        "rules": {
+          "string": [
+            {
+              "value1": "={{ $json.message_type }}",
+              "operation": "equal",
+              "value2": "image"
+            }
+          ]
+        },
+        "fallbackOutput": "1"
+      },
+      "notes": "Routes WAIT_TICKET messages. Output 0=image (proceed to upload). Output 1=fallback (text, re-prompt user to send a photo).",
+      "notesPos": "right"
+    },
+    {
+      "id": "download-media-001",
+      "name": "Download WhatsApp Media",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        0,
+        2700
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.media_id }}",
+        "authentication": "genericCredential",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.WHATSAPP_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "responseFormat": "file"
+          }
+        }
+      },
+      "notes": "Downloads ticket image binary from WhatsApp Cloud API using media_id. Response is binary (file format) passed directly to Upload node. WHATSAPP_TOKEN must be configured.",
+      "notesPos": "right"
+    },
+    {
+      "id": "upload-ticket-001",
+      "name": "Upload Ticket API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        400,
+        2400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPERLIKERS_BASE_URL }}/campaigns/{{ $env.SUPERLIKERS_CAMPAIGN }}/tickets/upload",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.SUPERLIKERS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "retries": 3,
+            "wait": 1000,
+            "multiplier": 2
+          },
+          "response": {
+            "responseFormat": "json",
+            "outputResponse": "response"
+          }
+        },
+        "sendBinary": true,
+        "binaryPropertyName": "data"
+      },
+      "notes": "Uploads ticket image via POST /tickets/upload. Multipart/form-data field 'image' from previous node's binary. Retries 3x exponential backoff. Returns photo_id, url, size_bytes, mime_type.",
+      "notesPos": "right"
+    },
+    {
+      "id": "upload-result-001",
+      "name": "Upload Result",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [
+        400,
+        2700
+      ],
+      "parameters": {
+        "dataType": "number",
+        "mode": "rules",
+        "rules": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 200
+            },
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "gte",
+              "value2": 400
+            }
+          ]
+        },
+        "fallbackOutput": "2"
+      },
+      "notes": "Routes upload result. Output 0=200 (ok, store photo_id -> UPLOAD_TICKET). Output 1=4xx/5xx (error, retry/re-prompt). Output 2=fallback (network error).",
+      "notesPos": "right"
+    },
+    {
+      "id": "process-invoice-001",
+      "name": "Process Invoice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        0,
+        3000
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredential",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "=gpt-4o"
+            },
+            {
+              "name": "temperature",
+              "value": 0.1
+            },
+            {
+              "name": "response_format",
+              "value": {
+                "type": "json_object"
+              }
+            },
+            {
+              "name": "messages",
+              "value": [
+                {
+                  "role": "system",
+                  "content": "Eres un extractor de datos de facturas y tickets de compra. Devuelve SOLO un JSON valido con estos campos: amount (numero), currency (string, ej: MXN), date (string YYYY-MM-DD), merchant_name (string), items (array de objetos con name, quantity, price), confidence_score (numero 0-1)."
+                },
+                {
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Extrae los datos de esta factura o ticket de compra:"
+                    },
+                    {
+                      "type": "image_url",
+                      "image_url": {
+                        "url": "={{ $json.photo_url }}"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "timeout": 45000,
+          "retry": {
+            "retries": 2,
+            "wait": 5000,
+            "multiplier": 1
+          },
+          "response": {
+            "responseFormat": "json",
+            "outputResponse": "response"
+          }
+        }
+      },
+      "notes": "Sends ticket image to OpenAI Vision API (gpt-4o) for OCR extraction. Uses photo_url from session. Expects JSON response with amount, currency, date, merchant_name, items, confidence_score. Timeout 45s, retry 2x.",
+      "notesPos": "right"
+    },
+    {
+      "id": "invoice-validator-001",
+      "name": "Invoice Validator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        3300
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// Invoice Validator\n// Validates OpenAI Vision response\n// Output 0: valid (confidence >= 0.7, required fields present)\n// Output 1: invalid (low confidence or missing fields)\n\nconst data = $input.first().json;\nconst body = data.body || {};\nconst choices = body.choices || [];\n\nif (choices.length === 0) {\n  // No response from AI\n  return [[], [{ json: { ...data, action: 'invoice_invalid', error: 'No se pudo procesar la imagen. Intenta con una foto mas clara.' } }]];\n}\n\nlet invoiceData;\ntry {\n  const content = choices[0].message?.content || '{}';\n  invoiceData = JSON.parse(content);\n} catch (e) {\n  return [[], [{ json: { ...data, action: 'invoice_invalid', error: 'No se pudieron extraer los datos de la factura. Intenta de nuevo.' } }]];\n}\n\nconst confidence = invoiceData.confidence_score || 0;\nconst hasRequired = invoiceData.amount && invoiceData.merchant_name && invoiceData.date;\n\nif (confidence >= 0.7 && hasRequired) {\n  // VALID — output 0\n  return [[{ json: { ...data, invoice_data: invoiceData, action: 'invoice_valid' } }], []];\n} else {\n  // INVALID — output 1\n  const reason = !hasRequired ? 'faltan campos requeridos' : 'confianza baja (' + confidence + ')';\n  return [[], [{ json: { ...data, action: 'invoice_invalid', invoice_data: invoiceData, error: 'No se pudieron verificar los datos de la factura. ' + reason + '. Intenta con una foto mas clara.' } }]];\n}"
+      },
+      "notes": "Validates OpenAI Vision JSON output. Output 0=valid (confidence >= 0.7, has amount/merchant_name/date). Output 1=invalid (low confidence or missing fields → retry WAIT_TICKET).",
+      "notesPos": "right"
+    },
+    {
+      "id": "register-purchase-001",
+      "name": "Register Purchase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        400,
+        3000
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPERLIKERS_BASE_URL }}/campaigns/{{ $env.SUPERLIKERS_CAMPAIGN }}/purchases",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.SUPERLIKERS_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "participant_id",
+              "value": "={{ $json.session.participant_id }}"
+            },
+            {
+              "name": "photo_id",
+              "value": "={{ $json.session.photo_id }}"
+            },
+            {
+              "name": "invoice_data",
+              "value": "={{ $json.invoice_data }}"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "retries": 3,
+            "wait": 1000,
+            "multiplier": 2
+          },
+          "response": {
+            "responseFormat": "json",
+            "outputResponse": "response"
+          }
+        }
+      },
+      "notes": "POST to register purchase in Superlikers. Body: { participant_id, photo_id, invoice_data }. Handles 201 (ok), 409 (duplicate → use existing_purchase_id).",
+      "notesPos": "right"
+    },
+    {
+      "id": "purchase-result-001",
+      "name": "Purchase Result",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [
+        400,
+        3300
+      ],
+      "parameters": {
+        "dataType": "number",
+        "mode": "rules",
+        "rules": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 201
+            },
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 409
+            }
+          ]
+        },
+        "fallbackOutput": "2"
+      },
+      "notes": "Routes purchase registration result. Output 0=201 (ok → Accept Entry). Output 1=409 (duplicate → still Accept Entry with existing_purchase_id). Output 2=fallback (error → ERROR).",
+      "notesPos": "right"
+    },
+    {
+      "id": "accept-entry-001",
+      "name": "Accept Entry",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        400,
+        3600
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.SUPERLIKERS_BASE_URL }}/campaigns/{{ $env.SUPERLIKERS_CAMPAIGN }}/activities/{{ $env.SUPERLIKERS_ACTIVITY_ID }}/entries",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.SUPERLIKERS_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "participant_id",
+              "value": "={{ $json.session.participant_id }}"
+            },
+            {
+              "name": "purchase_id",
+              "value": "={{ $json.body && $json.body.purchase_id ? $json.body.purchase_id : ($json.body && $json.body.existing_purchase_id ? $json.body.existing_purchase_id : '') }}"
+            },
+            {
+              "name": "action",
+              "value": "approve"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "retries": 3,
+            "wait": 1000,
+            "multiplier": 2
+          },
+          "response": {
+            "responseFormat": "json",
+            "outputResponse": "response"
+          }
+        }
+      },
+      "notes": "PUT to accept entry/approve activity participation. Body: { participant_id, purchase_id, action: 'approve' }. Returns points_awarded, total_points.",
+      "notesPos": "right"
+    },
+    {
+      "id": "entry-result-001",
+      "name": "Entry Result",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [
+        400,
+        3900
+      ],
+      "parameters": {
+        "dataType": "number",
+        "mode": "rules",
+        "rules": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 200
+            }
+          ]
+        },
+        "fallbackOutput": "1"
+      },
+      "notes": "Routes entry acceptance result. Output 0=200 (ok → Points Builder). Output 1=fallback (error → ERROR).",
+      "notesPos": "right"
+    },
+    {
+      "id": "points-builder-001",
+      "name": "Points Builder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        4200
+      ],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// Points Builder\n// Builds final FINISHED message with points summary\n\nconst data = $input.first().json;\nconst body = data.body || {};\nconst pointsAwarded = body.points_awarded || 0;\nconst totalPoints = body.total_points || 0;\n\nconst session = data.session ? { ...data.session } : {};\nsession.state = 'FINISHED';\nsession.retry_count = 0;\n\nconst replyMessage = '¡Felicidades! Has completado el proceso.\n\nPuntos ganados en esta compra: ' + pointsAwarded + '\nTotal de puntos acumulados: ' + totalPoints + '\n\nGracias por participar en la promocion de Superlikers. 🎉';\n\nreturn [{\n  json: {\n    ...data,\n    session,\n    points_awarded: pointsAwarded,\n    total_points: totalPoints,\n    action: 'finished',\n    replyMessage: replyMessage\n  }\n}];"
+      },
+      "notes": "Builds final message with points summary from Accept Entry response. Sets state=FINISHED. Displays points_awarded and total_points.",
       "notesPos": "right"
     }
   ],
@@ -270,21 +897,21 @@
         ],
         [
           {
-            "node": "Message Builder",
+            "node": "Name Handler",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Message Builder",
+            "node": "Email Validator",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Message Builder",
+            "node": "Confirmation Handler",
             "type": "main",
             "index": 0
           }
@@ -292,6 +919,62 @@
         [
           {
             "node": "Search Participant",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Register Participant",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "WAIT_TICKET Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message Builder",
             "type": "main",
             "index": 0
           }
@@ -380,13 +1063,284 @@
           }
         ]
       ]
+    },
+    "Name Handler": {
+      "main": [
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Validator": {
+      "main": [
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmation Handler": {
+      "main": [
+        [
+          {
+            "node": "Register Participant",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Participant": {
+      "main": [
+        [
+          {
+            "node": "Registration Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registration Result": {
+      "main": [
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WAIT_TICKET Router": {
+      "main": [
+        [
+          {
+            "node": "Download WhatsApp Media",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download WhatsApp Media": {
+      "main": [
+        [
+          {
+            "node": "Upload Ticket API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Ticket API": {
+      "main": [
+        [
+          {
+            "node": "Upload Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Result": {
+      "main": [
+        [
+          {
+            "node": "Process Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Invoice": {
+      "main": [
+        [
+          {
+            "node": "Invoice Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Validator": {
+      "main": [
+        [
+          {
+            "node": "Register Purchase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Purchase": {
+      "main": [
+        [
+          {
+            "node": "Purchase Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Purchase Result": {
+      "main": [
+        [
+          {
+            "node": "Accept Entry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Accept Entry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accept Entry": {
+      "main": [
+        [
+          {
+            "node": "Entry Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entry Result": {
+      "main": [
+        [
+          {
+            "node": "Points Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Points Builder": {
+      "main": [
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "pinData": {},
+  "pinData": {
+  },
   "versionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "active": false,
-  "settings": {},
-  "tags": [],
+  "settings": {
+  },
+  "tags": [
+
+  ],
   "id": "f47a8b0c-1d2e-4f3a-9b8c-7d6e5f4a3b2c",
   "staticData": null
 }
