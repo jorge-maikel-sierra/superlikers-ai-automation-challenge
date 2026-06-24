@@ -1,0 +1,392 @@
+{
+  "name": "Participant Onboarding v1",
+  "nodes": [
+    {
+      "id": "f47a8b0c-1d2e-4f3a-9b8c-7d6e5f4a3b2c",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "path": "webhook/whatsapp",
+        "httpMethods": ["GET", "POST"],
+        "options": {
+          "rawBody": true
+        },
+        "responseMode": "lastNode",
+        "responseData": "allEntries",
+        "options": {}
+      },
+      "notes": "Receives incoming webhooks from WhatsApp Cloud API. GET handles verification challenges; POST processes inbound messages. Responds 200 to everything (lastNode mode sends last node output as response).",
+      "notesPos": "right"
+    },
+    {
+      "id": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "name": "Message Parser",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// WhatsApp Webhook Message Parser\n// Normalizes incoming webhook payload into standard format { phone, message_type, message_body, media_id, is_media, timestamp }\n\nconst rawData = $input.first().json;\n\n// 1) Check for WhatsApp Cloud API GET verification handshake\n// In n8n, GET query params may appear directly or nested under \"query\"\nconst hubMode = rawData.hub?.mode || rawData.query?.hub?.mode || '';\nconst hubToken = rawData.hub?.['verify_token'] || rawData.query?.hub?.['verify_token'] || '';\nconst hubChallenge = rawData.hub?.challenge || rawData.query?.hub?.challenge || '';\n\nif (hubMode === 'subscribe') {\n  const expectedToken = process.env.WHATSAPP_VERIFY_TOKEN || '';\n  const verified = hubToken === expectedToken;\n  return [\n    {\n      json: {\n        isVerification: true,\n        verified: verified,\n        challenge: verified ? hubChallenge : 'Verification failed - token mismatch'\n      }\n    }\n  ];\n}\n\n// 2) Check for POST with WhatsApp message payload\nif (rawData.entry && Array.isArray(rawData.entry) && rawData.entry.length > 0) {\n  const entry = rawData.entry[0];\n  if (entry.changes && Array.isArray(entry.changes) && entry.changes.length > 0) {\n    const change = entry.changes[0];\n    const value = change.value || {};\n\n    // Discard status updates (no messages array)\n    if (!value.messages || !Array.isArray(value.messages) || value.messages.length === 0) {\n      return [\n        {\n          json: {\n            isStatusUpdate: true\n          }\n        }\n      ];\n    }\n\n    const msg = value.messages[0];\n    const contact = value.contacts && value.contacts.length > 0 ? value.contacts[0] : null;\n    const messageType = msg.type || 'text';\n\n    // Extract message body based on type\n    let messageBody = '';\n    let mediaId = '';\n\n    if (messageType === 'text' && msg.text) {\n      messageBody = msg.text.body || '';\n    } else if (messageType === 'image' && msg.image) {\n      messageBody = msg.image.caption || '';\n      mediaId = msg.image.id || '';\n    } else if (messageType === 'document' && msg.document) {\n      messageBody = msg.document.caption || '';\n      mediaId = msg.document.id || '';\n    } else if (messageType === 'audio' && msg.audio) {\n      mediaId = msg.audio.id || '';\n    } else if (messageType === 'video' && msg.video) {\n      mediaId = msg.video.id || '';\n    }\n\n    return [\n      {\n        json: {\n          isVerification: false,\n          isStatusUpdate: false,\n          phone: msg.from || '',\n          message_type: messageType,\n          message_body: messageBody,\n          media_id: mediaId,\n          is_media: messageType !== 'text',\n          message_id: msg.id || '',\n          timestamp: msg.timestamp || String(Math.floor(Date.now() / 1000)),\n          profile_name: contact ? contact.profile?.name || '' : ''\n        }\n      }\n    ];\n  }\n}\n\n// 3) Unknown payload format — treat as status update to avoid errors\nreturn [\n  {\n    json: {\n      isStatusUpdate: true\n    }\n  }\n];\n"
+      },
+      "notes": "Normalizes incoming WhatsApp payload into a standard format. Handles both GET verification and POST message processing. Extracts phone, message_type, message_body, media_id, is_media, timestamp from WhatsApp Cloud API format.",
+      "notesPos": "right"
+    },
+    {
+      "id": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+      "name": "Session Manager",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 600],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// Session Manager\n// Reads/writes sessions via n8n Data Store ($dataStore)\n// Key: session:{phone}, TTL: 1800 (30 minutes)\n// Creates new session with state:START if none exists\n// If expired (30min) → delete and re-create\n\nconst data = $input.first().json;\n\n// Pass through verification and status updates (no session needed)\nif (data.isVerification) {\n  return [{ json: { ...data, session: null } }];\n}\nif (data.isStatusUpdate) {\n  return [{ json: { ...data, session: null } }];\n}\n\nconst phone = data.phone;\nif (!phone) {\n  return [{ json: { ...data, session: null, error: 'No phone number provided' } }];\n}\n\nconst sessionKey = `session:${phone}`;\n\n// Try to load existing session from Data Store\nlet session = null;\ntry {\n  session = await $dataStore.get(sessionKey);\n} catch (e) {\n  // Data Store unavailable or key doesn't exist\n  session = null;\n}\n\nconst now = new Date();\n\n// If session exists, check expiry (30 minutes)\nif (session) {\n  const updatedAt = new Date(session.updated_at).getTime();\n  const thirtyMinutesAgo = now.getTime() - (30 * 60 * 1000);\n\n  if (updatedAt < thirtyMinutesAgo) {\n    // Session expired — delete and re-create\n    try {\n      await $dataStore.delete(sessionKey);\n    } catch (e) {\n      // Ignore deletion errors\n    }\n    session = null;\n  }\n}\n\n// Create new session if none exists or was expired\nif (!session) {\n  session = {\n    phone: phone,\n    name: '',\n    email: '',\n    state: 'START',\n    participant_id: '',\n    retry_count: 0,\n    created_at: now.toISOString(),\n    updated_at: now.toISOString()\n  };\n\n  try {\n    await $dataStore.set(sessionKey, session, { ttl: 1800 });\n  } catch (e) {\n    console.error('Failed to create session:', e);\n  }\n} else {\n  // Update timestamp to keep session alive\n  session.updated_at = now.toISOString();\n  try {\n    await $dataStore.set(sessionKey, session, { ttl: 1800 });\n  } catch (e) {\n    console.error('Failed to update session:', e);\n  }\n}\n\nreturn [\n  {\n    json: {\n      ...data,\n      session: session,\n      sessionKey: sessionKey\n    }\n  }\n];\n"
+      },
+      "notes": "Loads or creates session from n8n Data Store. Key format: session:{phone}. Creates new session with state=START if not found. Deletes expired sessions (>30min) and re-creates. TTL: 1800s.",
+      "notesPos": "right"
+    },
+    {
+      "id": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+      "name": "State Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [0, 900],
+      "parameters": {
+        "dataType": "string",
+        "mode": "rules",
+        "rules": {
+          "string": [
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "START"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "WAIT_PHONE"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "WAIT_NAME"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "WAIT_EMAIL"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "WAIT_CONFIRMATION"
+            },
+            {
+              "value1": "={{ $json.session === null ? '' : $json.session.state }}",
+              "operation": "equal",
+              "value2": "SEARCH_PARTICIPANT"
+            }
+          ]
+        },
+        "fallbackOutput": "6"
+      },
+      "notes": "Routes messages by session.state. Output 0=START, 1=WAIT_PHONE, 2=WAIT_NAME, 3=WAIT_EMAIL, 4=WAIT_CONFIRMATION, 5=SEARCH_PARTICIPANT, 6=default (error/unknown state). Uses Switch node for visual branching — not code if/else.",
+      "notesPos": "right"
+    },
+    {
+      "id": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a",
+      "name": "Welcome Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 1200],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// Welcome Handler\n// START state: send welcome message and transition to WAIT_PHONE\n\nconst data = $input.first().json;\n\nif (!data.session) {\n  return [{ json: { ...data, replyMessage: '', action: 'noop' } }];\n}\n\n// Update session: state → WAIT_PHONE, reset retry\nconst session = { ...data.session };\nsession.state = 'WAIT_PHONE';\nsession.retry_count = 0;\nsession.updated_at = new Date().toISOString();\n\nreturn [\n  {\n    json: {\n      ...data,\n      session: session,\n      replyMessage: 'Bienvenido a Superlikers. Para participar en nuestra promocion, por favor indica tu numero de telefono a 10 digitos.',\n      action: 'welcome'\n    }\n  }\n];\n"
+      },
+      "notes": "Handles START state: sends welcome message, transitions session state to WAIT_PHONE, resets retry_count. Routes to Session Update after processing.",
+      "notesPos": "right"
+    },
+    {
+      "id": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
+      "name": "Phone Validator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// Phone Validator\n// Output 0: valid phone number → continues to Search Participant\n// Output 1: invalid phone number → routes to error handling\n// Validates: 10 digits (Colombia), strips non-numeric, normalizes with COUNTRY_CODE prefix\n\nconst COUNTRY_CODE = process.env.COUNTRY_CODE || '57';\nconst PHONE_DIGITS = parseInt(process.env.PHONE_DIGITS || '10', 10);\n\nconst data = $input.first().json;\nlet rawPhone = data.message_body || '';\n\n// Strip all non-numeric characters\nconst digits = rawPhone.replace(/\\D/g, '');\n\nif (digits.length !== PHONE_DIGITS) {\n  // INVALID — output 1\n  return [\n    [],\n    [\n      {\n        json: {\n          ...data,\n          valid: false,\n          phone: null,\n          normalizedPhone: null,\n          error: `El numero debe tener exactamente ${PHONE_DIGITS} digitos. Recibimos ${digits.length} digitos. Intenta de nuevo.`\n        }\n      }\n    ]\n  ];\n}\n\n// VALID — output 0\nconst normalizedPhone = `+${COUNTRY_CODE}${digits}`;\n\nreturn [\n  [\n    {\n      json: {\n        ...data,\n        valid: true,\n        phone: normalizedPhone,\n        normalizedPhone: normalizedPhone,\n        rawInput: rawPhone\n      }\n    }\n  ],\n  []\n];\n"
+      },
+      "notes": "Strips non-numeric chars from input, validates exactly 10 digits (Colombia), normalizes with +57 prefix. Two outputs: output 0=valid (routes to Search Participant), output 1=invalid (routes to Session Update for error reply). COUNTRY_CODE and PHONE_DIGITS configurable via env vars.",
+      "notesPos": "right"
+    },
+    {
+      "id": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
+      "name": "Search Participant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [400, 600],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPERLIKERS_BASE_URL }}/campaigns/{{ $env.SUPERLIKERS_CAMPAIGN }}/participants/search",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.SUPERLIKERS_API_KEY }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "={{ $json.normalizedPhone ? $json.normalizedPhone : $json.phone }}"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "retries": 3,
+            "wait": 1000,
+            "multiplier": 2
+          },
+          "response": {
+            "responseFormat": "json",
+            "outputResponse": "response"
+          }
+        }
+      },
+      "notes": "Sends GET to Superlikers API to search for participant by phone. URL: {SUPERLIKERS_BASE_URL}/campaigns/{SUPERLIKERS_CAMPAIGN}/participants/search?phone={phone}. Auth via X-API-Key header. Retries 3 times with exponential backoff (1s, 2s, 4s). Includes full response (body + statusCode) for downstream routing.",
+      "notesPos": "right"
+    },
+    {
+      "id": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+      "name": "Participant Exists",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [400, 900],
+      "parameters": {
+        "dataType": "number",
+        "mode": "rules",
+        "rules": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 200
+            },
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 404
+            }
+          ]
+        },
+        "fallbackOutput": "2"
+      },
+      "notes": "Branches on HTTP response status from Search Participant. Output 0=200 (found → store participant data, state=WAIT_TICKET). Output 1=404 (not found → state=WAIT_NAME, ask for name). Output 2=fallback (error handling for 4xx/5xx/timeout).",
+      "notesPos": "right"
+    },
+    {
+      "id": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
+      "name": "Session Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 1200],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// Session Update\n// Applies partial updates to session and persists to Data Store\n// Resets retry_count on state change\n// Saves with TTL 1800\n\nconst data = $input.first().json;\n\n// Pass through verification and status updates\nif (data.isVerification || data.isStatusUpdate) {\n  return [{ json: data }];\n}\n\nlet session = data.session ? { ...data.session } : null;\nif (!session) {\n  return [{ json: data }];\n}\n\nconst phone = data.normalizedPhone || data.phone || session.phone || '';\nconst sessionKey = `session:${phone}`;\n\n// Determine what updates to apply based on action + context\nconst previousState = session.state;\n\nif (data.action === 'welcome') {\n  // Welcome Handler already updated state to WAIT_PHONE — persist\n} else if (data.valid === false) {\n  // Phone validation failed — increment retry, keep current state\n  session.retry_count = (session.retry_count || 0) + 1;\n} else if (data.valid === true && phone) {\n  // Phone validated successfully — update phone, stay in current state\n  session.phone = phone;\n  // State changes happen AFTER the HTTP search, not here\n} else if (data.statusCode === 200 && data.body) {\n  // Participant found via API\n  const participant = typeof data.body === 'object' ? data.body : {};\n  session.state = 'WAIT_TICKET';\n  session.retry_count = 0;\n  session.participant_id = participant.id || participant.participant_id || '';\n  session.name = participant.name || '';\n  session.email = participant.email || '';\n  session.phone = phone || session.phone;\n} else if (data.statusCode === 404) {\n  // Participant not found — proceed to registration flow\n  session.state = 'WAIT_NAME';\n  session.retry_count = 0;\n} else if (data.statusCode >= 400) {\n  // API error (500, 429, etc.) — increment retry, keep state\n  session.retry_count = (session.retry_count || 0) + 1;\n}\n\n// Reset retry_count on state change\nif (session.state !== previousState && previousState) {\n  session.retry_count = 0;\n}\n\n// Always update timestamp\nsession.updated_at = new Date().toISOString();\n\n// Persist to Data Store\nif (phone) {\n  try {\n    await $dataStore.set(sessionKey, session, { ttl: 1800 });\n  } catch (e) {\n    console.error('Failed to update session in Data Store:', e);\n  }\n}\n\nreturn [\n  {\n    json: {\n      ...data,\n      session: session\n    }\n  }\n];\n"
+      },
+      "notes": "Applies partial updates to session based on the current action: phone validation result, participant search result (200=found/404=not found/error), or welcome transition. Resets retry_count on state change. Persists to Data Store with TTL 1800.",
+      "notesPos": "right"
+    },
+    {
+      "id": "c9d0e1f2-3a4b-5c6d-7e8f-9a0b1c2d3e4f",
+      "name": "Message Builder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 1500],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// Message Builder\n// Builds WhatsApp message payload from the current state and context\n// Returns: { to, type, text: { body } }\n// This is the last node in the chain — its output becomes the webhook response\n\nconst data = $input.first().json;\n\n// 1) Handle GET verification — return challenge as plain text response\nif (data.isVerification) {\n  return [\n    {\n      json: {\n        to: '',\n        type: 'text',\n        text: {\n          body: data.challenge || 'Verification failed'\n        }\n      }\n    }\n  ];\n}\n\n// 2) Handle status updates — return empty 200\nif (data.isStatusUpdate) {\n  return [\n    {\n      json: {\n        to: '',\n        type: 'none',\n        text: {\n          body: 'ok'\n        }\n      }\n    }\n  ];\n}\n\nconst phone = data.normalizedPhone || data.phone || '';\nconst session = data.session || {};\n\n// 3) Use explicit replyMessage if set by a handler\nlet replyBody = data.replyMessage || '';\n\n// 4) If no replyMessage was set, generate based on session state\nif (!replyBody && session.state) {\n  switch (session.state) {\n    case 'WAIT_PHONE':\n      replyBody = 'Por favor indica tu numero de telefono a 10 digitos.';\n      break;\n    case 'WAIT_NAME':\n      replyBody = 'No encontramos tu registro. Por favor indicame tu nombre completo.';\n      break;\n    case 'WAIT_EMAIL':\n      replyBody = 'Gracias. Ahora indicame tu correo electronico.';\n      break;\n    case 'WAIT_CONFIRMATION':\n      replyBody = 'Confirma que los datos ingresados son correctos. Responde Si o No.';\n      break;\n    case 'WAIT_TICKET':\n      replyBody = 'Ya encontramos tu registro. Ahora enviame una foto de tu ticket.';\n      break;\n    default:\n      replyBody = 'Gracias por tu mensaje. Te responderemos pronto.';\n  }\n}\n\n// 5) If there was an error (phone validation, etc.), use it\nif (!replyBody && data.error) {\n  replyBody = data.error;\n}\n\nreturn [\n  {\n    json: {\n      to: phone,\n      type: 'text',\n      text: {\n        body: replyBody || 'Gracias por tu mensaje. Te responderemos pronto.'\n      }\n    }\n  }\n];\n"
+      },
+      "notes": "Builds the WhatsApp message payload based on session state and context. Handles: GET verification (returns challenge), status updates (returns 'ok'), handler replyMessage, state-based auto-replies, and error messages. Output format: { to, type, text: { body } }.",
+      "notesPos": "right"
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Message Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message Parser": {
+      "main": [
+        [
+          {
+            "node": "Session Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session Manager": {
+      "main": [
+        [
+          {
+            "node": "State Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "State Router": {
+      "main": [
+        [
+          {
+            "node": "Welcome Handler",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Phone Validator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search Participant",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Welcome Handler": {
+      "main": [
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Phone Validator": {
+      "main": [
+        [
+          {
+            "node": "Search Participant",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Participant": {
+      "main": [
+        [
+          {
+            "node": "Participant Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Participant Exists": {
+      "main": [
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session Update": {
+      "main": [
+        [
+          {
+            "node": "Message Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "versionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "active": false,
+  "settings": {},
+  "tags": [],
+  "id": "f47a8b0c-1d2e-4f3a-9b8c-7d6e5f4a3b2c",
+  "staticData": null
+}
