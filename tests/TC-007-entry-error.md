@@ -21,9 +21,9 @@ Validar que cuando el registro de compra se completa exitosamente pero la aproba
 | Paso | Transición | API / Acción | Respuesta Esperada |
 |------|------------|-------------|-------------------|
 | 1–5 | **START → PROCESS_INVOICE** | Flujo normal (saludo → teléfono → detección existente → upload → OCR) | — |
-| 6 | **PROCESS_INVOICE → REGISTER_PURCHASE** | OCR confidence: **0.90** ≥ 0.7 ✅ → invoice_ref: FAC-2024-0624-002 | "Factura procesada: Walmart, $850.00 MXN. Registrando compra..." |
-| 7 | **REGISTER_PURCHASE → ✅ Éxito** | `POST /campaigns/3z/purchases` → `201` `{"purchase_id": "pur_m4n5o6p7", "points_earned": 85, "status": "pending_approval"}` | "✅ Compra registrada por $850.00 MXN. Has ganado 85 puntos. Aprobando tu participación..." |
-| 8 | **ACCEPT_ENTRY → Intento 1** | `PUT /campaigns/3z/activities/3z/entries` | ⏱️ Timeout o respuesta **500** |
+| 6 | **PROCESS_INVOICE → REGISTER_PURCHASE** | OCR confidence: **0.90** ≥ 0.7 ✅ → `{ref:"FAC-2024-0624-002", products:[{ref:"Walmart prod", price:"850.00", quantity:"1"}]}` | "Factura procesada: Walmart, $850.00 MXN. Registrando compra..." |
+| 7 | **REGISTER_PURCHASE → ✅ Éxito** | `POST /retail/buy` → `200` `{"invoice":{"ref":"FAC-2024-0624-002","points":85}, "participant":{"available_points":85}}` | "✅ Compra registrada. Has ganado 85 puntos. Aprobando tu participación..." |
+| 8 | **ACCEPT_ENTRY → Intento 1** | `POST /entries/accept` body: `{api_key, campaign, id:"entry_n2o3p4q5"}` | ⏱️ Timeout o respuesta **500** |
 | 9 | **ACCEPT_ENTRY → Intento 2** | Retry #1 — backoff 1s | ⏱️ Respuesta **503** (Service Unavailable) |
 | 10 | **ACCEPT_ENTRY → Intento 3** | Retry #2 — backoff 2s | ⏱️ Respuesta **500** |
 | 11 | **ACCEPT_ENTRY → Intento 4** | Retry #3 — backoff 4s | ⏱️ Respuesta **500** |

@@ -21,19 +21,18 @@ Validar que el sistema detecta cuando el usuario envía la misma foto de ticket 
 | Paso | Transición | API / Acción | Respuesta Esperada |
 |------|------------|-------------|-------------------|
 | 1 | **START → WAIT_PHONE** | — | Saludo + solicitud de número |
-| 2 | **WAIT_PHONE → SEARCH_PARTICIPANT** | `GET /campaigns/3z/participants/search?phone=521234567890` | Buscando participante... |
-| 3 | **SEARCH_PARTICIPANT → WAIT_TICKET** | `200` `{"id": "part_f8a3b2c1", "name": "María García Hernández"}` | "👋 ¡Bienvenida de nuevo, María! Envía la foto de tu ticket de compra." |
+| 2 | **WAIT_PHONE → SEARCH_PARTICIPANT** | `GET /participants/search` body: `{api_key, campaign, query:{cellphone:"521234567890", state:"active"}}` | Buscando participante... |
+| 3 | **SEARCH_PARTICIPANT → WAIT_TICKET** | `200` `{"object":{"id":"part_f8a3b2c1", "name":"María García Hernández", "email":"maria.garcia@email.com"}}` | "👋 ¡Bienvenida de nuevo, María! Envía la foto de tu ticket de compra." |
 | 4 | **WAIT_TICKET → UPLOAD_TICKET** | — | Validación de imagen ✅ → Subiendo... |
-| 5 | **UPLOAD_TICKET → PROCESAR DUPLICADO** | `POST /campaigns/3z/tickets/upload` → `200` `{"photo_id": "photo_d4e5f6a7"}` (sistema detecta que `photo_id` ya existe en una compra previa) | — |
-| 6 | **Detección Duplicado** | Consulta interna o API → `409` duplicado detectado | "⚠️ Esta foto de ticket ya fue registrada anteriormente el 2026-06-24 por un monto de $1,250.50 MXN en Soriana Híper. No es necesario volver a registrarla." |
-| 7 | **→ ACCEPT_ENTRY** | Reutiliza `purchase_id: "pur_7b8c9d0e"` existente | "Aprobando tu participación..." |
-| 8 | **→ FINISHED** | `PUT /campaigns/3z/activities/3z/entries` → `200` (si no está ya aprobada) o mensaje informativo | "✅ Tu participación ya está registrada. Puedes seguir participando con un ticket diferente." |
+| 5 | **UPLOAD_TICKET → PROCESS_INVOICE** | `POST /photos` (multipart, campo `upload_photo`) → `422` `{"message": "Sha1 is already taken"}` | — |
+| 6 | **Detección Duplicado** | API devuelve 422 con "Sha1 is already taken" | "⚠️ Esta foto de ticket ya fue registrada anteriormente. Por favor envía un ticket diferente." |
+| 7 | **→ WAIT_TICKET** | Sesión vuelve a WAIT_TICKET | "Puedes enviar la foto de un ticket diferente para acumular más puntos." |
 
 ### Validaciones Clave
-- **No se debe crear un duplicado** en la tabla de purchases
-- El sistema debe detectar el `photo_id` duplicado antes de llamar a `POST /purchases` o manejar el `409` de la API
-- El flujo debe continuar sin bloquear al usuario
-- El mensaje debe ser informativo, no un error grave
+- La API devuelve `422` con `"message": "Sha1 is already taken"` al detectar imagen duplicada en `/photos`
+- El sistema NO debe intentar `/retail/buy` si `/photos` ya retornó 422
+- El flujo regresa a WAIT_TICKET para que el usuario envíe un ticket diferente
+- El mensaje debe ser informativo, no un error técnico
 
 ## Actual Result
 _Pendiente de captura_

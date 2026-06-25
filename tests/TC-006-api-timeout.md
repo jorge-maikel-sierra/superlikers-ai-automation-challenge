@@ -21,7 +21,7 @@ Validar el comportamiento del sistema cuando la API de Superlikers no responde d
 |------|------------|-------------|-------------------|
 | 1 | **START → WAIT_PHONE** | — | Saludo + solicitud de número |
 | 2 | **WAIT_PHONE → SEARCH_PARTICIPANT** | — | Validación: 10 dígitos ✅ → Consultando API... |
-| 3 | **Intento 1 (timeout 5s)** | `GET /campaigns/3z/participants/search?phone=521234567890` | ⏱️ **Timeout** después de 5s sin respuesta |
+| 3 | **Intento 1 (timeout 5s)** | `GET /participants/search` body: `{api_key, campaign, query:{cellphone:"521234567890", state:"active"}}` | ⏱️ **Timeout** después de 5s sin respuesta |
 | 4 | **Backoff 1s → Intento 2** | Retry #1 — espera 1s, timeout 5s | ⏱️ **Timeout** después de 5s sin respuesta |
 | 5 | **Backoff 2s → Intento 3** | Retry #2 — espera 2s, timeout 5s | ⏱️ **Timeout** después de 5s sin respuesta |
 | 6 | **Backoff 4s → Intento 4** | Retry #3 — espera 4s (capped), timeout 5s | ⏱️ **Timeout** después de 5s sin respuesta |
