@@ -1,815 +1,1606 @@
 {
-  "updatedAt": "2026-06-25T03:59:26.529Z",
-  "createdAt": "2026-06-24T21:52:42.515Z",
-  "id": "geR3efpK8GTzUpTN",
-  "name": "Participant Onboarding v1",
-  "description": "WhatsApp chatbot for Superlikers contest participant onboarding flow",
-  "active": true,
-  "isArchived": false,
   "nodes": [
     {
       "parameters": {
-        "multipleMethods": true,
-        "path": "webhook/whatsapp",
-        "responseMode": "responseNode",
-        "options": {}
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
       },
-      "id": "0569a378-e427-4e52-af68-24f7637f3aca",
-      "name": "WhatsApp Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.3,
       "position": [
-        0,
-        0
+        -1392,
+        752
       ],
-      "notesPos": "right",
-      "webhookId": "75e4c939-468d-48be-ae09-28c1f752512e",
-      "notes": "Receives WhatsApp GET verification and POST message webhooks. Responses are emitted by Respond to Webhook nodes."
-    },
-    {
-      "parameters": {
-        "jsCode": "// WhatsApp Webhook Message Parser\n\nconst rawData = $input.first().json;\nconst payload = rawData.body || rawData;\n\nconst hubMode = payload.hub?.mode || rawData.query?.['hub.mode'] || rawData.params?.hub?.mode || '';\nconst hubToken = payload.hub?.['verify_token'] || rawData.query?.['hub.verify_token'] || rawData.params?.hub?.['verify_token'] || '';\nconst hubChallenge = payload.hub?.challenge || rawData.query?.['hub.challenge'] || rawData.params?.hub?.challenge || '';\n\nif (hubMode === 'subscribe') {\n  const expectedToken = $env.WHATSAPP_VERIFY_TOKEN || '';\n  const verified = hubToken === expectedToken;\n  return [{ json: { isVerification: true, verified, challenge: verified ? hubChallenge : 'Verification failed - token mismatch' } }];\n}\n\nif (payload.entry && Array.isArray(payload.entry) && payload.entry.length > 0) {\n  const entry = payload.entry[0];\n  if (entry.changes && Array.isArray(entry.changes) && entry.changes.length > 0) {\n    const change = entry.changes[0];\n    const value = change.value || {};\n    if (!value.messages || !Array.isArray(value.messages) || value.messages.length === 0) {\n      return [{ json: { isStatusUpdate: true } }];\n    }\n    const msg = value.messages[0];\n    const contact = value.contacts?.[0] || null;\n    const messageType = msg.type || 'text';\n    let messageBody = '';\n    let mediaId = '';\n    if (messageType === 'text' && msg.text) messageBody = msg.text.body || '';\n    else if (messageType === 'image' && msg.image) { messageBody = msg.image.caption || ''; mediaId = msg.image.id || ''; }\n    else if (messageType === 'document' && msg.document) { messageBody = msg.document.caption || ''; mediaId = msg.document.id || ''; }\n    else if (messageType === 'audio' && msg.audio) mediaId = msg.audio.id || '';\n    else if (messageType === 'video' && msg.video) mediaId = msg.video.id || '';\n    return [{ json: { isVerification: false, isStatusUpdate: false, phone: msg.from || '', message_type: messageType, message_body: messageBody, media_id: mediaId, is_media: messageType !== 'text', message_id: msg.id || '', timestamp: msg.timestamp || String(Math.floor(Date.now() / 1000)), profile_name: contact?.profile?.name || '' } }];\n  }\n}\nreturn [{ json: { isStatusUpdate: true } }];\n"
-      },
-      "id": "2a9eb3e5-835a-48bd-83b7-e9d95a7896da",
-      "name": "Message Parser",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        0,
-        304
-      ],
-      "notesPos": "right",
-      "notes": "Normalizes incoming WhatsApp payload into a standard format. Handles both GET verification and POST message processing. Extracts phone, message_type, message_body, media_id, is_media, timestamp from WhatsApp Cloud API format."
-    },
-    {
-      "parameters": {
-        "mode": "expression",
-        "output": "={{ $json.session === null ? 14 : (['START','WAIT_PHONE','WAIT_NAME','WAIT_EMAIL','WAIT_CONFIRMATION','SEARCH_PARTICIPANT','REGISTER_PARTICIPANT','WAIT_TICKET','UPLOAD_TICKET','PROCESS_INVOICE','REGISTER_PURCHASE','ACCEPT_ENTRY','FINISHED','ERROR'].indexOf($json.session.state) === -1 ? 14 : ['START','WAIT_PHONE','WAIT_NAME','WAIT_EMAIL','WAIT_CONFIRMATION','SEARCH_PARTICIPANT','REGISTER_PARTICIPANT','WAIT_TICKET','UPLOAD_TICKET','PROCESS_INVOICE','REGISTER_PURCHASE','ACCEPT_ENTRY','FINISHED','ERROR'].indexOf($json.session.state)) }}",
-        "outputsAmount": 15
-      },
-      "id": "7427de40-6e8b-46f5-b5a7-e1ca619c3b7b",
-      "name": "State Router",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 2,
-      "position": [
-        0,
-        896
-      ],
-      "notesPos": "right",
-      "notes": "Routes messages by session.state. Output 0=START, 1=WAIT_PHONE, 2=WAIT_NAME, 3=WAIT_EMAIL, 4=WAIT_CONFIRMATION, 5=SEARCH_PARTICIPANT, 6=REGISTER_PARTICIPANT, 7=WAIT_TICKET, 8=UPLOAD_TICKET, 9=PROCESS_INVOICE, 10=REGISTER_PURCHASE, 11=ACCEPT_ENTRY, 12=FINISHED, 13=ERROR, 14=default (unrecognized state)."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Welcome Handler\n// START state: send welcome message and transition to WAIT_PHONE\n\nconst data = $input.first().json;\n\nif (!data.session) {\n  return [{ json: { ...data, replyMessage: '', action: 'noop' } }];\n}\n\n// Update session: state → WAIT_PHONE, reset retry\nconst session = { ...data.session };\nsession.state = 'WAIT_PHONE';\nsession.retry_count = 0;\nsession.updated_at = new Date().toISOString();\n\nreturn [\n  {\n    json: {\n      ...data,\n      session: session,\n      replyMessage: 'Bienvenido a Superlikers. Para participar en nuestra promocion, por favor indica tu numero de telefono a 10 digitos.',\n      action: 'welcome'\n    }\n  }\n];\n"
-      },
-      "id": "19cc55d9-dd25-4cf1-a717-1f77c8e19dd2",
-      "name": "Welcome Handler",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        0,
-        1200
-      ],
-      "notesPos": "right",
-      "notes": "Handles START state: sends welcome message, transitions session state to WAIT_PHONE, resets retry_count. Routes to Session Update after processing."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Límite de reintentos\nconst MAX_RETRIES = 3;\nconst retryCount = data.retry_count || 0;\n\nif (retryCount >= MAX_RETRIES) {\n  return [[], [{ \n    json: { \n      ...data, \n      state: 'ERROR',\n      action: 'max_retries_exceeded',\n      replyMessage: 'Has superado el número máximo de intentos. Por favor contacta a soporte para continuar.'\n    } \n  }]];\n}\n\n// Phone Validator\n\nconst COUNTRY_CODE = $env.COUNTRY_CODE || '57';\nconst PHONE_DIGITS = parseInt($env.PHONE_DIGITS || '10', 10);\nconst data = $input.first().json;\nconst rawPhone = data.message_body || '';\nconst digits = rawPhone.replace(/\\D/g, '');\n\nlet localPhone = digits;\nif (digits.length === PHONE_DIGITS + COUNTRY_CODE.length && digits.startsWith(COUNTRY_CODE)) {\n  localPhone = digits.slice(COUNTRY_CODE.length);\n}\n\nif (localPhone.length !== PHONE_DIGITS) {\n  return [{ json: { ...data, valid: false, error: `El numero debe tener ${PHONE_DIGITS} digitos locales. Recibimos ${digits.length}. Intenta de nuevo.` } }];\n}\n\nconst normalizedPhone = `+${COUNTRY_CODE}${localPhone}`;\nreturn [{ json: { ...data, valid: true, phone: normalizedPhone, normalizedPhone, localPhone, rawInput: rawPhone } }];"
-      },
-      "id": "a8dd69cc-1909-4db4-ab37-ec0508771f37",
-      "name": "Phone Validator",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        400,
-        304
-      ],
-      "notesPos": "right",
-      "notes": "Strips non-numeric chars from input, validates exactly 10 digits (Colombia), normalizes with +57 prefix. Two outputs: output 0=valid (routes to Search Participant), output 1=invalid (routes to Session Update for error reply). COUNTRY_CODE and PHONE_DIGITS configurable via env vars."
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $env.SUPERLIKERS_BASE_URL }}/participants/search",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "json",
-        "options": {
-          "timeout": 10000,
-          "response": {
-            "response": {
-              "fullResponse": true
-            }
-          }
-        },
-        "jsonBody": "={\n  \"api_key\": \"={{ $env.SUPERLIKERS_API_KEY }}\",\n  \"campaign\": \"3z\",\n  \"query\": {\n    \"cellphone\": \"{{ $json.session.local_phone || $json.localPhone || \\\"\\\" }}\",\n    \"state\": \"active\"\n  }\n}"
-      },
-      "id": "f515751f-74aa-40d7-8c94-0ea9a178a830",
-      "name": "Search Participant",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 2,
-      "position": [
-        400,
-        608
-      ],
-      "notesPos": "right",
+      "id": "8578e0c1-4abf-4333-8b14-bf3f26e84d55",
+      "name": "Telegram Trigger",
+      "webhookId": "16fe2f58-318b-47d4-b99f-31244cc2572c",
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "94wy9jJBXoXI",
-          "name": "Superlikers API"
+        "telegramApi": {
+          "id": "b4unBNxGc9bU0vnW",
+          "name": "Telegram account"
         }
-      },
-      "notes": "Official Postman contract: GET /participants/search with Authorization: Bearer api_key and JSON body {api_key,campaign,query:{cellphone,state}}. Search by cellphone depends on campaign signup-field mapping."
+      }
     },
     {
       "parameters": {
-        "mode": "expression",
-        "output": "={{ $json.statusCode === 200 ? 0 : ($json.statusCode === 404 ? 1 : 2) }}",
-        "outputsAmount": 3
-      },
-      "id": "301f3b67-3675-4118-b399-d71ebe069791",
-      "name": "Participant Exists",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 2,
-      "position": [
-        400,
-        912
-      ],
-      "notesPos": "right",
-      "notes": "Branches on HTTP response status from Search Participant. Output 0=200 (found → store participant data, state=WAIT_TICKET). Output 1=404 (not found → state=WAIT_NAME, ask for name). Output 2=fallback (error handling for 4xx/5xx/timeout)."
-    },
-    {
-      "parameters": {
-        "jsCode": "const data = $input.first().json;\nif (data.isVerification || data.isStatusUpdate) return [{ json: data }];\n\nlet session = data.session ? { ...data.session } : null;\nif (!session) return [{ json: data }];\n\nconst phone = data.normalizedPhone || data.phone || session.phone || '';\nconst sessionKey = `session:${phone}`;\nconst previousState = session.state;\nconst statusCode = Number(data.statusCode || 0);\nconst body = typeof data.body === 'object' && data.body !== null ? data.body : {};\nconst message = String(body.message || '').toLowerCase();\n\nfunction localPhone(value) {\n  return String(value || '').replace(/^\\+?57/, '').replace(/\\D/g, '');\n}\n\nif (data.action === 'welcome') {\n} else if (data.valid === false) {\n  session.retry_count = (session.retry_count || 0) + 1;\n} else if (data.valid === true && phone) {\n  session.phone = phone;\n  session.local_phone = data.localPhone || localPhone(phone);\n} else if (data.action === 'name_captured') {\n  session.name = data.name || '';\n  session.state = 'WAIT_EMAIL';\n} else if (data.action === 'email_captured') {\n  session.email = data.email || '';\n  session.distinct_id = data.email || '';\n  session.state = 'WAIT_CONFIRMATION';\n} else if (data.action === 'confirmed') {\n  session.state = 'REGISTER_PARTICIPANT';\n} else if (data.action === 'cancelled') {\n  session.state = 'WAIT_NAME';\n  session.name = ''; session.email = ''; session.distinct_id = ''; session.retry_count = 0;\n} else if (data.action === 'invoice_invalid') {\n  session.state = 'WAIT_TICKET';\n  session.retry_count = (session.retry_count || 0) + 1;\n  data.replyMessage = data.error || 'No pude leer la factura. Envia una foto mas clara del ticket.';\n} else if (data.action === 'finished') {\n  session.state = 'FINISHED';\n} else if (statusCode === 404) {\n  session.state = 'WAIT_NAME';\n  session.retry_count = 0;\n} else if (statusCode >= 400) {\n  session.retry_count = (session.retry_count || 0) + 1;\n  session.state = session.state === 'WAIT_TICKET' ? 'WAIT_TICKET' : 'ERROR';\n  if (message.includes('sha1 is already taken')) {\n    data.replyMessage = 'Esta foto ya fue registrada antes. Envia un ticket diferente.';\n    session.state = 'WAIT_TICKET';\n  } else if (message.includes('already') || message.includes('taken') || message.includes('duplic')) {\n    data.replyMessage = 'Esta factura o dato ya fue registrado antes. No vamos a duplicar puntos.';\n  } else {\n    data.replyMessage = body.message || 'Ocurrio un problema con la API. Intenta de nuevo en unos minutos.';\n  }\n} else if (statusCode === 200 && body.invoice) {\n  session.invoice_ref = body.invoice.ref || session.invoice_ref || '';\n  session.invoice_data = body.invoice;\n  session.purchase_points = Number(body.invoice.points || 0);\n  session.promotion_points = Number(body.invoice.promotions_points || body.invoice.promotion_points || 0);\n  session.total_points = Number(body.participant?.available_points || body.participant?.accumulated_points || session.total_points || 0);\n  session.state = 'REGISTER_PURCHASE';\n} else if (statusCode === 200 && body.data && (body.data.state || body.data.execution_error !== undefined)) {\n  if (body.data.execution_error) {\n    session.state = 'ERROR';\n    data.replyMessage = 'Tu compra quedo registrada, pero la aprobacion automatica fallo. La dejamos para revision manual.';\n  } else {\n    session.state = 'ACCEPT_ENTRY';\n  }\n} else if (statusCode === 200 && (body.object || body.email || body.points !== undefined)) {\n  const participant = body.object || body;\n  const email = participant.email || participant.distinct_id || '';\n  session.state = email ? 'WAIT_TICKET' : 'WAIT_NAME';\n  session.retry_count = 0;\n  session.participant_id = participant.id || participant.participant_id || '';\n  session.name = participant.name || session.name || '';\n  session.email = email || session.email || '';\n  session.distinct_id = email || session.distinct_id || '';\n  session.phone = phone || session.phone;\n  session.local_phone = data.localPhone || session.local_phone || localPhone(phone);\n} else if (statusCode === 200 && message.includes('participant was successfully created')) {\n  session.state = 'WAIT_TICKET';\n  session.retry_count = 0;\n  session.distinct_id = session.email;\n  session.local_phone = session.local_phone || localPhone(session.phone);\n  data.replyMessage = 'Registro exitoso. Ahora envia una foto clara de tu ticket de compra.';\n} else if (statusCode === 200 && (message.includes('uploaded') || message.includes('enviada') || body.image_url || body.url || body.id || body.entry_id || body.activity_id)) {\n  session.entry_id = body.id || body.entry_id || body.activity_id || body.object?.id || body.data?.id || session.entry_id || '';\n  session.photo_id = session.entry_id;\n  session.photo_url = body.image_url || body.url || session.photo_url || '';\n  session.state = 'UPLOAD_TICKET';\n  session.retry_count = 0;\n} else if (statusCode === 200 && body.ok === 'false') {\n  session.state = 'ERROR';\n  data.replyMessage = body.message || 'La API rechazo la solicitud.';\n}\n\nif (session.state !== previousState && previousState) session.retry_count = 0;\nsession.updated_at = new Date().toISOString();\n\nreturn [{ json: { ...data, session, sessionKey } }];\n"
-      },
-      "id": "f954cf61-2bde-43ee-b34e-685f8f04e457",
-      "name": "Session Update",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        400,
-        1200
-      ],
-      "notesPos": "right",
-      "notes": "Persists session transitions and handles official Superlikers response shapes: participant search/create, /photos, /retail/buy, /entries/accept, and 422 duplicate image/factura errors."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Message Builder\n// Builds WhatsApp outbound payload and webhook response metadata.\n\nconst data = $input.first().json;\n\nif (data.isVerification) {\n  return [{ json: { shouldSendWhatsApp: false, webhookRespondWith: 'text', webhookResponseBody: data.challenge || 'Verification failed', to: '', type: 'none', text: { body: data.challenge || 'Verification failed' } } }];\n}\n\nif (data.isStatusUpdate) {\n  return [{ json: { shouldSendWhatsApp: false, webhookRespondWith: 'text', webhookResponseBody: 'ok', to: '', type: 'none', text: { body: 'ok' } } }];\n}\n\nconst phone = data.phone || data.normalizedPhone || data.session?.phone || '';\nconst session = data.session || {};\nlet replyBody = data.replyMessage || data.error || '';\n\nif (!replyBody && session.state) {\n  switch (session.state) {\n    case 'WAIT_PHONE':\n      replyBody = 'Por favor indica tu numero de telefono a 10 digitos.';\n      break;\n    case 'WAIT_NAME':\n      replyBody = 'No encontramos tu registro. Por favor indicame tu nombre completo.';\n      break;\n    case 'WAIT_EMAIL':\n      replyBody = 'Gracias. Ahora indicame tu correo electronico.';\n      break;\n    case 'WAIT_CONFIRMATION':\n      replyBody = `Confirma que tus datos son correctos:\nNombre: ${session.name || ''}\nEmail: ${session.email || ''}\n\nResponde Si o No.`;\n      break;\n    case 'WAIT_TICKET':\n      replyBody = 'Ya tenemos tus datos. Enviame una foto clara de tu ticket de compra en formato JPEG o PNG.';\n      break;\n    case 'UPLOAD_TICKET':\n      replyBody = 'Gracias, recibimos tu ticket. Estamos leyendo la factura con IA...';\n      break;\n    case 'PROCESS_INVOICE':\n      replyBody = 'Estamos preparando el registro de tu compra...';\n      break;\n    case 'REGISTER_PURCHASE':\n      replyBody = 'Compra registrada. Estamos aprobando tu participacion...';\n      break;\n    case 'ACCEPT_ENTRY':\n      replyBody = 'Confirmando tu participacion...';\n      break;\n    case 'FINISHED':\n      replyBody = data.replyMessage || 'Proceso completado. Gracias por participar.';\n      break;\n    case 'ERROR':\n      replyBody = data.replyMessage || 'Ocurrio un error controlado. Por favor intenta de nuevo o contacta soporte.';\n      break;\n    default:\n      replyBody = 'Gracias por tu mensaje. Te responderemos pronto.';\n  }\n}\n\nreturn [{\n  json: {\n    ...data,\n    shouldSendWhatsApp: Boolean(phone && replyBody),\n    webhookRespondWith: 'json',\n    webhookResponseBody: { ok: true },\n    to: phone.replace(/^\\+/, ''),\n    type: 'text',\n    text: { body: replyBody || 'Gracias por tu mensaje. Te responderemos pronto.' }\n  }\n}];\n"
-      },
-      "id": "06434880-0cb3-4afe-b9ca-506b13247e85",
-      "name": "Message Builder",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        400,
-        1616
-      ],
-      "notesPos": "right",
-      "notes": "Builds outbound WhatsApp text payload. Verification/status messages are not sent to WhatsApp and are answered by Respond to Webhook."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Límite de reintentos\nconst MAX_RETRIES = 3;\nconst retryCount = data.retry_count || 0;\n\nif (retryCount >= MAX_RETRIES) {\n  return [[], [{ \n    json: { \n      ...data, \n      state: 'ERROR',\n      action: 'max_retries_exceeded',\n      replyMessage: 'Has superado el número máximo de intentos. Por favor contacta a soporte para continuar.'\n    } \n  }]];\n}\n\n// Name Handler\n// Captures user's name, validates, transitions to WAIT_EMAIL\n// Output 0: valid name\n// Output 1: invalid name\n\nconst data = $input.first().json;\nconst name = (data.message_body || '').trim();\n\n// Validate: min 3 chars, only letters and spaces (incl. accents)\nconst validName = /^[a-zA-Z\\\\u00E0-\\\\u00FC\\\\u00D1\\\\u00F1\\\\s]+$/.test(name);\n\nif (!name || name.length < 3 || !validName) {\n  const session = data.session ? {...data.session} : {};\n  session.retry_count = (session.retry_count || 0) + 1;\n  return [\n    [],\n    [{\n      json: {\n        ...data,\n        session,\n        action: 'invalid_name',\n        replyMessage: 'Por favor ingresa un nombre valido (minimo 3 caracteres, solo letras y espacios).'\n      }\n    }]\n  ];\n}\n\nconst session = data.session ? {...data.session} : {};\nsession.name = name;\nsession.state = 'WAIT_EMAIL';\nsession.retry_count = 0;\n\nreturn [\n  [{\n    json: {\n      ...data,\n      session,\n      name,\n      action: 'name_captured',\n      replyMessage: `Gracias ${name}. Ahora indicame tu correo electronico.`\n    }\n  }],\n  []\n];\n"
-      },
-      "id": "aeb87022-da95-4774-892b-53948c39fe77",
-      "name": "Name Handler",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        0,
-        1504
-      ],
-      "notesPos": "right",
-      "notes": "Captures user's name. Validates: min 3 chars, only letters and spaces. Output 0=valid (name_captured, WAIT_EMAIL), Output 1=invalid (stay WAIT_NAME, error reply)."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Límite de reintentos\nconst MAX_RETRIES = 3;\nconst retryCount = data.retry_count || 0;\n\nif (retryCount >= MAX_RETRIES) {\n  return [[], [{ \n    json: { \n      ...data, \n      state: 'ERROR',\n      action: 'max_retries_exceeded',\n      replyMessage: 'Has superado el número máximo de intentos. Por favor contacta a soporte para continuar.'\n    } \n  }]];\n}\n\n// Email Validator\n// Captures user's email, validates format, transitions to WAIT_CONFIRMATION\n// Output 0: valid email\n// Output 1: invalid email\n\nconst data = $input.first().json;\nconst email = (data.message_body || '').trim().toLowerCase();\n\nconst emailRegex = /^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/;\n\nif (!email || !emailRegex.test(email)) {\n  const session = data.session ? {...data.session} : {};\n  session.retry_count = (session.retry_count || 0) + 1;\n  return [\n    [],\n    [{\n      json: {\n        ...data,\n        session,\n        action: 'invalid_email',\n        replyMessage: 'El correo ingresado no es valido. Por favor ingresa un correo electronico valido (ejemplo: nombre@correo.com).'\n      }\n    }]\n  ];\n}\n\nconst session = data.session ? {...data.session} : {};\nsession.email = email;\nsession.state = 'WAIT_CONFIRMATION';\nsession.retry_count = 0;\n\nreturn [\n  [{\n    json: {\n      ...data,\n      session,\n      email,\n      action: 'email_captured',\n      replyMessage: `Confirma que tus datos son correctos:\\\\nNombre: ${session.name || ''}\\\\nEmail: ${email}\\\\n\\\\nResponde Si o No.`\n    }\n  }],\n  []\n];\n"
-      },
-      "id": "472f2b57-3e54-46c2-8885-d50910d6723d",
-      "name": "Email Validator",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        0,
-        1808
-      ],
-      "notesPos": "right",
-      "notes": "Validates email format. Output 0=valid (email_captured, WAIT_CONFIRMATION with name+email summary), Output 1=invalid (stay WAIT_EMAIL, error reply)."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Confirmation Handler\n// Parses user response (Sí/No) at WAIT_CONFIRMATION\n// Output 0: Sí → REGISTER_PARTICIPANT\n// Output 1: No → reset to WAIT_NAME\n// Output 2: fallback → stay WAIT_CONFIRMATION\n\nconst data = $input.first().json;\nconst response = (data.message_body || '').trim().toLowerCase();\n\nconst yesVariants = ['sí', 'si', 'yes', 'dale', 'ok', 'confirmo', 'confirmar', 'correcto'];\nconst noVariants = ['no', 'nop', 'cancelar', 'cancel', 'cancelar registro'];\n\nlet session = data.session ? {...data.session} : {};\n\nif (yesVariants.includes(response)) {\n  session.state = 'REGISTER_PARTICIPANT';\n  session.retry_count = 0;\n  return [\n    [{\n      json: {\n        ...data,\n        session,\n        action: 'confirmed',\n        replyMessage: 'Gracias. Estamos registrando tus datos...'\n      }\n    }],\n    [],\n    []\n  ];\n}\n\nif (noVariants.includes(response)) {\n  session.state = 'WAIT_NAME';\n  session.name = '';\n  session.email = '';\n  session.retry_count = 0;\n  return [\n    [],\n    [{\n      json: {\n        ...data,\n        session,\n        action: 'cancelled',\n        replyMessage: 'OK, empecemos de nuevo. Por favor indicame tu nombre completo.'\n      }\n    }],\n    []\n  ];\n}\n\nsession.retry_count = (session.retry_count || 0) + 1;\nreturn [\n  [],\n  [],\n  [{\n    json: {\n      ...data,\n      session,\n      action: 'unclear_confirmation',\n      replyMessage: `No entendi tu respuesta. Responde Si si los datos son correctos, o No para reiniciar.\\\\n\\\\nNombre: ${session.name || ''}\\\\nEmail: ${session.email || ''}`\n    }\n  }]\n];\n"
-      },
-      "id": "a3b4418e-ea00-422c-b549-9d66d7e6ae67",
-      "name": "Confirmation Handler",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        0,
-        2112
-      ],
-      "notesPos": "right",
-      "notes": "Parses user confirmation (Sí/No). Output 0=Sí (REGISTER_PARTICIPANT), Output 1=No (reset to WAIT_NAME, clear name+email), Output 2=fallback (stay WAIT_CONFIRMATION, retry)."
-    },
-    {
-      "parameters": {
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "url": "={{ $env.SUPERLIKERS_BASE_URL }}/participants",
-        "options": {
-          "timeout": 10000
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
         },
-        "method": "POST",
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"api_key\": \"={{ $env.SUPERLIKERS_API_KEY }}\",\n  \"campaign\": \"3z\",\n  \"properties\": {\n    \"email\": \"={{ $json.session.email }}\",\n    \"celular\": \"={{ $json.session.local_phone }}\",\n    \"name\": \"={{ $json.session.name }}\"\n  },\n  \"active\": true,\n  \"verified_cellphone\": true,\n  \"verified_email\": true,\n  \"not_send_verify_registration\": true\n}"
-      },
-      "id": "a9f01afe-6c89-4bbf-996e-25346aa70715",
-      "name": "Register Participant",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 2,
-      "position": [
-        400,
-        1808
-      ],
-      "notesPos": "right",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "94wy9jJBXoXI",
-          "name": "Superlikers API"
-        }
-      },
-      "notes": "Official Postman contract: POST /participants with {api_key,campaign,properties,active,verified_cellphone,verified_email,not_send_verify_registration}. distinct_id is the participant email in this challenge."
-    },
-    {
-      "parameters": {
-        "mode": "expression",
-        "output": "={{ $json.statusCode === 200 ? 0 : ($json.statusCode >= 400 ? 1 : 2) }}",
-        "outputsAmount": 3,
-        "jsCode": "// Register Participant Response Handler\n\nconst data = $input.first().json;\nconst statusCode = data.statusCode || 0;\nconst body = data.body || {};\nconst errorMessage = body.message || '';\n\nconsole.log('Registration Response:', JSON.stringify({ statusCode, body }, null, 2));\n\n// Error 422: Validación fallida\nif (statusCode === 422) {\n  console.log('ERROR 422:', errorMessage);\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'registration_validation_error',\n      state: 'WAIT_NAME',\n      error: errorMessage,\n      replyMessage: `No pudimos completar tu registro: ${errorMessage}. Por favor verifica tus datos e intenta de nuevo.`\n    } \n  }]];\n}\n\n// Error de autenticación\nif (statusCode === 401) {\n  console.log('ERROR: API Key inválida');\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'api_auth_error',\n      state: 'ERROR',\n      replyMessage: 'Ocurrió un error de configuración. Por favor contacta al administrador.'\n    } \n  }]];\n}\n\n// Errores 5xx\nif (statusCode >= 500) {\n  console.log('ERROR: Servidor no disponible');\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'server_error',\n      state: 'ERROR',\n      replyMessage: 'El servicio está temporalmente fuera de línea. Por favor intenta de nuevo en unos minutos.'\n    } \n  }]];\n}\n\n// Success 200\nif (statusCode === 200) {\n  console.log('✓ Participante registrado exitosamente');\n  \n  const session = data.session || {};\n  session.state = 'WAIT_TICKET';\n  session.participant_id = body.id || session.email; // distinct_id es el email\n  \n  return [{ \n    json: { \n      ...data, \n      session,\n      action: 'registration_success'\n    } \n  }], [];\n}\n\n// Respuesta inesperada\nconsole.log('ERROR: Respuesta inesperada del servidor');\nreturn [[], [{ \n  json: { \n    ...data, \n    action: 'unexpected_response',\n    state: 'ERROR',\n    replyMessage: 'Ocurrió un error inesperado. Por favor intenta de nuevo.'\n  } \n}]];\n"
-      },
-      "id": "c4beb496-798d-495f-ae4a-14e368bc44f9",
-      "name": "Registration Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        400,
-        2112
-      ],
-      "notesPos": "right",
-      "notes": "Routes participant registration. Output 0=200 success (official docs), output 1=>=400 API error, output 2=fallback."
-    },
-    {
-      "parameters": {
-        "mode": "expression",
-        "output": "={{ $json.is_media ? 0 : 1 }}",
-        "outputsAmount": 2
-      },
-      "id": "d19976d0-0d6c-4eb9-a14e-ba6b32cdb3db",
-      "name": "WAIT_TICKET Router",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 2,
-      "position": [
-        0,
-        2400
-      ],
-      "notesPos": "right",
-      "notes": "Routes WAIT_TICKET messages. Output 0=image (proceed to upload). Output 1=fallback (text, re-prompt user to send a photo)."
-    },
-    {
-      "parameters": {
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "url": "=https://graph.facebook.com/v21.0/{{ $json.media_id }}",
-        "options": {
-          "timeout": 15000
-        }
-      },
-      "id": "77a49a90-f358-44c1-a266-8df8939ae1ed",
-      "name": "Download WhatsApp Media",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 2,
-      "position": [
-        0,
-        2704
-      ],
-      "notesPos": "right",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "z66VYMo2NnAQ",
-          "name": "WhatsApp Bearer"
-        }
-      },
-      "notes": "Downloads ticket image binary from WhatsApp Cloud API using media_id. Response is binary (file format) passed directly to Upload node. WHATSAPP_TOKEN must be configured."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Validar tamaño de imagen (máximo 10MB)\n\nconst MAX_SIZE_MB = 10;\nconst MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;\n\nconst data = $input.first().json;\nconst binary = $input.first().binary;\n\n// Verificar si hay datos binarios\nif (!binary || !binary.data) {\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'image_invalid',\n      error: 'No se recibió la imagen correctamente'\n    } \n  }]];\n}\n\n// Obtener tamaño del archivo\nconst imageData = binary.data;\nconst sizeBytes = imageData.data ? imageData.data.length : 0;\nconst sizeMB = (sizeBytes / (1024 * 1024)).toFixed(2);\n\nconsole.log(`Tamaño de imagen: ${sizeMB} MB (${sizeBytes} bytes)`);\n\n// Validar tamaño\nif (sizeBytes > MAX_SIZE_BYTES) {\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'image_too_large',\n      size_mb: sizeMB,\n      max_size_mb: MAX_SIZE_MB,\n      replyMessage: `La imagen es demasiado grande (${sizeMB} MB). El tamaño máximo permitido es ${MAX_SIZE_MB} MB. Por favor envía una imagen más pequeña.`\n    } \n  }]];\n}\n\n// Tamaño válido\nreturn [{ \n  json: { \n    ...data, \n    image_size_mb: sizeMB,\n    image_size_bytes: sizeBytes \n  },\n  binary \n}], [];\n"
-      },
-      "id": "image-size-validator-001",
-      "name": "Image Size Validator",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1600,
-        800
-      ],
-      "notesPos": "top",
-      "notes": "Valida que la imagen no exceda 10MB según la especificación del challenge"
-    },
-    {
-      "parameters": {
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "url": "={{ $env.SUPERLIKERS_BASE_URL }}/photos",
-        "options": {
-          "timeout": 30000
-        },
-        "method": "POST",
-        "sendBody": true,
-        "contentType": "multipart-form-data",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "api_key",
-              "value": "={{ $env.SUPERLIKERS_API_KEY }}"
-            },
-            {
-              "name": "campaign",
-              "value": "3z"
-            },
-            {
-              "name": "distinct_id",
-              "value": "={{ $json.session.email }}"
-            },
-            {
-              "name": "title",
-              "value": "Ticket de compra"
-            },
-            {
-              "name": "category",
-              "value": "tickets"
-            }
-          ]
-        },
-        "sendBinaryData": true,
-        "binaryPropertyName": "upload_photo"
-      },
-      "id": "2b8fc2b1-8c28-4e92-9dda-1e3f5a59b933",
-      "name": "Upload Ticket API",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 2,
-      "position": [
-        400,
-        2400
-      ],
-      "notesPos": "right",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "94wy9jJBXoXI",
-          "name": "Superlikers API"
-        }
-      },
-      "notes": "Official Postman contract: POST /photos multipart/form-data with api_key,campaign,distinct_id,upload_photo,title/category. Duplicate image returns 422 with “Sha1 is already taken”."
-    },
-    {
-      "parameters": {
-        "mode": "expression",
-        "output": "={{ $json.statusCode === 200 ? 0 : ($json.statusCode >= 400 ? 1 : 2) }}",
-        "outputsAmount": 3,
-        "jsCode": "// Upload Ticket Response Handler\n\nconst data = $input.first().json;\nconst statusCode = data.statusCode || 0;\nconst body = data.body || {};\nconst errorMessage = body.message || '';\n\nconsole.log('Upload Ticket Response:', JSON.stringify({ statusCode, body }, null, 2));\n\n// Error 422: Imagen duplicada (Sha1 already taken)\nif (statusCode === 422 && errorMessage.includes('Sha1 is already taken')) {\n  console.log('ERROR: Imagen duplicada detectada');\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'image_duplicate',\n      state: 'ERROR',\n      replyMessage: '⚠️ Este ticket ya fue registrado anteriormente. No puedes enviar la misma imagen dos veces. Si crees que es un error, contacta a soporte.'\n    } \n  }]];\n}\n\n// Error 422: Otros errores de validación\nif (statusCode === 422) {\n  console.log('ERROR 422:', errorMessage);\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'upload_validation_error',\n      state: 'ERROR',\n      error: errorMessage,\n      replyMessage: `No pudimos procesar tu ticket: ${errorMessage}. Por favor intenta de nuevo o contacta a soporte.`\n    } \n  }]];\n}\n\n// Error de autenticación\nif (statusCode === 401) {\n  console.log('ERROR: API Key inválida');\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'api_auth_error',\n      state: 'ERROR',\n      replyMessage: 'Ocurrió un error de configuración. Por favor contacta al administrador.'\n    } \n  }]];\n}\n\n// Errores 5xx (servidor)\nif (statusCode >= 500) {\n  console.log('ERROR: Servidor no disponible');\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'server_error',\n      state: 'ERROR',\n      replyMessage: 'El servicio está temporalmente fuera de línea. Por favor intenta de nuevo en unos minutos.'\n    } \n  }]];\n}\n\n// Success 200\nif (statusCode === 200 && body.id) {\n  console.log('✓ Ticket subido exitosamente:', body.id);\n  \n  // Guardar entry_id para usarlo en Accept Entry\n  const session = data.session || {};\n  session.entry_id = body.id || body.entry_id;\n  session.photo_url = body.image_url || body.url || '';\n  session.state = 'PROCESS_INVOICE';\n  \n  return [{ \n    json: { \n      ...data, \n      session,\n      entry_id: session.entry_id,\n      photo_url: session.photo_url,\n      action: 'upload_success'\n    } \n  }], [];\n}\n\n// Respuesta inesperada\nconsole.log('ERROR: Respuesta inesperada del servidor');\nreturn [[], [{ \n  json: { \n    ...data, \n    action: 'unexpected_response',\n    state: 'ERROR',\n    replyMessage: 'Ocurrió un error inesperado. Por favor intenta de nuevo.'\n  } \n}]];\n"
-      },
-      "id": "ff48c122-f0ae-4800-85b0-13a803b799bd",
-      "name": "Upload Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        400,
-        2704
-      ],
-      "notesPos": "right",
-      "notes": "Routes upload result. Output 0=200 (ok, store photo_id -> UPLOAD_TICKET). Output 1=4xx/5xx (error, retry/re-prompt). Output 2=fallback (network error).\nTODO: Agregar manejo de 'Sha1 is already taken' y 'ref already taken'"
-    },
-    {
-      "parameters": {
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "openAiApi",
-        "url": "https://api.openai.com/v1/chat/completions",
-        "options": {
-          "timeout": 45000
-        },
-        "method": "POST",
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"gpt-4o\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Eres un asistente que extrae informaci\\u00f3n de facturas de compra a partir de una imagen. Devuelve \\u00daNICAMENTE un objeto JSON v\\u00e1lido, sin texto adicional, sin explicaciones y sin bloques de c\\u00f3digo markdown.\\n\\nEstructura exacta a devolver:\\n{\\n  \\\"legible\\\": true,\\n  \\\"ref\\\": \\\"<numero de factura>\\\",\\n  \\\"products\\\": [\\n    { \\\"ref\\\": \\\"<codigo o nombre>\\\", \\\"price\\\": \\\"<precio unitario>\\\",\\n      \\\"quantity\\\": \\\"<cantidad>\\\", \\\"line\\\": \\\"<linea opcional>\\\",\\n      \\\"provider\\\": \\\"<proveedor opcional>\\\" }\\n  ],\\n  \\\"confidence_score\\\": 0.95\\n}\\n\\nReglas:\\n- Si la imagen NO es una factura legible o falta el n\\u00famero de factura o los productos, devuelve {\\\"legible\\\": false, \\\"confidence_score\\\": 0}.\\n- price y quantity siempre como string num\\u00e9rico, sin s\\u00edmbolos de moneda ni separadores de miles.\\n- No inventes datos que no aparezcan en la factura.\\n- confidence_score del 0 al 1 seg\\u00fan tu confianza en la extracci\\u00f3n.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"Extrae los datos de esta factura en el formato JSON especificado. IMPORTANTE: devuelve SOLO JSON válido, sin texto adicional.\"\n        },\n        {\n          \"type\": \"image_url\",\n          \"image_url\": {\n            \"url\": \"{{ $json.photo_url }}\"\n          }\n        }\n      ]\n    }\n  ],\n  \"response_format\": { \"type\": \"json_object\" },\n  \"temperature\": 0.1,\n  \"max_tokens\": 1000\n}"
-      },
-      "id": "e4bec5e0-d476-4d84-b810-81bb3a117417",
-      "name": "Process Invoice",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 2,
-      "position": [
-        0,
-        3008
-      ],
-      "notesPos": "right",
-      "credentials": {
-        "openAiApi": {
-          "id": "kAU1ZxfkYlRJ",
-          "name": "OpenAI"
-        }
-      },
-      "notes": "Sends the ticket image to OpenAI Vision and expects JSON compatible with Superlikers /retail/buy: {legible, ref, products[].ref, products[].price, products[].quantity, provider?, line?}."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Límite de reintentos\nconst MAX_RETRIES = 3;\nconst retryCount = data.retry_count || 0;\n\nif (retryCount >= MAX_RETRIES) {\n  return [[], [{ \n    json: { \n      ...data, \n      state: 'ERROR',\n      action: 'max_retries_exceeded',\n      replyMessage: 'Has superado el número máximo de intentos. Por favor contacta a soporte para continuar.'\n    } \n  }]];\n}\n\n// Invoice Validator\n// Validates OpenAI Vision response for Superlikers /retail/buy.\n// Output 0: valid invoice JSON\n// Output 1: invalid/illegible invoice\n\nconst data = $input.first().json;\nconst body = data.body || {};\nconst choices = body.choices || [];\n\nif (choices.length === 0) {\n  return [[], [{ json: { ...data, action: 'invoice_invalid', error: 'No se pudo procesar la imagen. Intenta con una foto mas clara.' } }]];\n}\n\nlet invoiceData;\ntry {\n  const content = choices[0].message?.content || '{}';\n  invoiceData = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (e) {\n  return [[], [{ json: { ...data, action: 'invoice_invalid', error: 'La IA no devolvio JSON valido. Intenta con una foto mas clara.' } }]];\n}\n\nconst products = Array.isArray(invoiceData.products) ? invoiceData.products : [];\nconst normalizedProducts = products\n  .map((product) => ({\n    ref: String(product.ref || product.name || '').trim(),\n    provider: product.provider ? String(product.provider).trim() : undefined,\n    line: product.line ? String(product.line).trim() : undefined,\n    price: String(product.price || '').replace(/[^0-9.]/g, ''),\n    quantity: String(product.quantity || '').replace(/[^0-9.]/g, '')\n  }))\n  .filter((product) => product.ref && product.price && product.quantity);\n\nconst confidence = Number(invoiceData.confidence_score ?? 1);\nconst invoiceRef = String(invoiceData.ref || invoiceData.invoice_ref || invoiceData.invoice_number || '').trim();\nconst legible = invoiceData.legible !== false;\n\nif (legible && confidence >= 0.7 && invoiceRef && normalizedProducts.length > 0) {\n  invoiceData.ref = invoiceRef;\n  invoiceData.products = normalizedProducts;\n  return [[{ json: { ...data, invoice_data: invoiceData, action: 'invoice_valid' } }], []];\n}\n\nconst reason = !legible ? 'la imagen no parece una factura legible' : (!invoiceRef ? 'falta el numero de factura' : (!normalizedProducts.length ? 'faltan productos validos' : `confianza baja (${confidence})`));\nreturn [[], [{ json: { ...data, action: 'invoice_invalid', invoice_data: invoiceData, error: 'No se pudieron verificar los datos de la factura: ' + reason + '. Intenta con una foto mas clara.' } }]];\n"
-      },
-      "id": "a273f5ef-0964-46bd-8af7-d68e504c343f",
-      "name": "Invoice Validator",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        0,
-        3312
-      ],
-      "notesPos": "right",
-      "notes": "Validates OCR output for /retail/buy: legible=true, ref present, products[] with ref/price/quantity, confidence >= 0.7."
-    },
-    {
-      "parameters": {
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "url": "={{ $env.SUPERLIKERS_BASE_URL }}/retail/buy",
-        "options": {
-          "timeout": 15000
-        },
-        "method": "POST",
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"api_key\": \"{{ $env.SUPERLIKERS_API_KEY }}\",\n  \"campaign\": \"3z\",\n  \"distinct_id\": \"{{ $json.session.email }}\",\n  \"ref\": \"{{ $json.invoice_data.ref }}\",\n  \"products\": {{ $json.invoice_data.products ? JSON.stringify($json.invoice_data.products) : '[]' }}\n}"
-      },
-      "id": "c4c179ca-e031-498b-9d7a-8e6c0af647e1",
-      "name": "Register Purchase",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 2,
-      "position": [
-        400,
-        3008
-      ],
-      "notesPos": "right",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "94wy9jJBXoXI",
-          "name": "Superlikers API"
-        }
-      },
-      "notes": "Official Postman contract: POST /retail/buy with {api_key,campaign,distinct_id,ref,products[]}. Response 200 contains invoice.points and participant point summary."
-    },
-    {
-      "parameters": {
-        "mode": "expression",
-        "output": "={{ $json.statusCode === 200 ? 0 : ($json.statusCode >= 400 ? 1 : 2) }}",
-        "outputsAmount": 3,
-        "jsCode": "// Register Purchase Response Handler\n\nconst data = $input.first().json;\nconst statusCode = data.statusCode || 0;\nconst body = data.body || {};\nconst errorMessage = body.message || '';\n\nconsole.log('Purchase Response:', JSON.stringify({ statusCode, body }, null, 2));\n\n// Error 422: Factura duplicada (ref already taken)\nif (statusCode === 422 && errorMessage.includes('ref already taken')) {\n  console.log('ERROR: Factura duplicada detectada');\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'invoice_duplicate',\n      state: 'ERROR',\n      replyMessage: '⚠️ Esta factura ya fue registrada anteriormente. No puedes registrar la misma compra dos veces. Si crees que es un error, contacta a soporte.'\n    } \n  }]];\n}\n\n// Error 422: Datos inválidos\nif (statusCode === 422) {\n  console.log('ERROR 422:', errorMessage);\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'purchase_validation_error',\n      state: 'ERROR',\n      error: errorMessage,\n      replyMessage: `No pudimos registrar tu compra: ${errorMessage}. Por favor contacta a soporte.`\n    } \n  }]];\n}\n\n// Error 400: Productos malformados\nif (statusCode === 400) {\n  console.log('ERROR 400:', errorMessage);\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'invalid_products',\n      state: 'WAIT_TICKET',\n      replyMessage: 'No pudimos procesar los productos de tu factura. Por favor envía una foto más clara del ticket.'\n    } \n  }]];\n}\n\n// Error de autenticación\nif (statusCode === 401) {\n  console.log('ERROR: API Key inválida');\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'api_auth_error',\n      state: 'ERROR',\n      replyMessage: 'Ocurrió un error de configuración. Por favor contacta al administrador.'\n    } \n  }]];\n}\n\n// Errores 5xx\nif (statusCode >= 500) {\n  console.log('ERROR: Servidor no disponible');\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'server_error',\n      state: 'ERROR',\n      replyMessage: 'El servicio está temporalmente fuera de línea. Por favor intenta de nuevo en unos minutos.'\n    } \n  }]];\n}\n\n// Success 200\nif (statusCode === 200 && body.invoice) {\n  console.log('✓ Compra registrada exitosamente');\n  \n  const invoice = body.invoice || {};\n  const participant = body.participant || {};\n  \n  const session = data.session || {};\n  session.invoice_ref = invoice.ref || session.invoice_ref || '';\n  session.purchase_points = Number(invoice.points || 0);\n  session.promotion_points = Number(invoice.promotions_points || 0);\n  session.total_points = session.purchase_points + session.promotion_points;\n  session.available_points = Number(participant.available_points || 0);\n  session.accumulated_points = Number(participant.accumulated_points || 0);\n  session.state = 'ACCEPT_ENTRY';\n  \n  return [{ \n    json: { \n      ...data, \n      session,\n      invoice,\n      participant,\n      action: 'purchase_success'\n    } \n  }], [];\n}\n\n// Respuesta inesperada\nconsole.log('ERROR: Respuesta inesperada del servidor');\nreturn [[], [{ \n  json: { \n    ...data, \n    action: 'unexpected_response',\n    state: 'ERROR',\n    replyMessage: 'Ocurrió un error inesperado. Por favor intenta de nuevo.'\n  } \n}]];\n"
-      },
-      "id": "4ec13607-44a1-4d20-a2bf-9173eee0d64c",
-      "name": "Purchase Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        400,
-        3312
-      ],
-      "notesPos": "right",
-      "notes": "Routes /retail/buy result. Output 0=200 success, output 1=>=400 duplicate/validation/API error, output 2=fallback.\nTODO: Agregar manejo de 'Sha1 is already taken' y 'ref already taken'"
-    },
-    {
-      "parameters": {
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "url": "={{ $env.SUPERLIKERS_BASE_URL }}/entries/accept",
-        "options": {
-          "timeout": 15000
-        },
-        "method": "POST",
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"api_key\": \"={{ $env.SUPERLIKERS_API_KEY }}\",\n  \"campaign\": \"3z\",\n  \"id\": \"={{ $json.session.entry_id }}\"\n}"
-      },
-      "id": "12c2f18b-6b4f-4875-8a63-2dc96fa1079d",
-      "name": "Accept Entry",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 2,
-      "position": [
-        400,
-        3600
-      ],
-      "notesPos": "right",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "94wy9jJBXoXI",
-          "name": "Superlikers API"
-        }
-      },
-      "notes": "Official Postman contract: POST /entries/accept with {api_key,campaign,id}, where id is the UploadPhoto entry/activity id returned by /photos (or recovered from response data). Watch for execution_error in the response body."
-    },
-    {
-      "parameters": {
-        "mode": "expression",
-        "output": "={{ $json.statusCode === 200 ? 0 : 1 }}",
-        "outputsAmount": 2,
-        "jsCode": "// Accept Entry Response Handler\n\nconst data = $input.first().json;\nconst statusCode = data.statusCode || 0;\nconst body = data.body || {};\n\nconsole.log('Entry Response:', JSON.stringify({ statusCode, body }, null, 2));\n\n// Error 404: Entry no existe\nif (statusCode === 404) {\n  console.log('ERROR: Entry ID no encontrado');\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'entry_not_found',\n      state: 'ERROR',\n      replyMessage: 'No encontramos el registro de tu ticket. Por favor contacta a soporte.'\n    } \n  }]];\n}\n\n// Error de autenticación\nif (statusCode === 401) {\n  console.log('ERROR: API Key inválida');\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'api_auth_error',\n      state: 'ERROR',\n      replyMessage: 'Ocurrió un error de configuración. Por favor contacta al administrador.'\n    } \n  }]];\n}\n\n// Errores 5xx\nif (statusCode >= 500) {\n  console.log('ERROR: Servidor no disponible');\n  return [[], [{ \n    json: { \n      ...data, \n      action: 'server_error',\n      state: 'ERROR',\n      replyMessage: 'El servicio está temporalmente fuera de línea. Tu compra está registrada, recibirás los puntos pronto.'\n    } \n  }]];\n}\n\n// Success 200 PERO con execution_error\nif (statusCode === 200) {\n  const responseData = body.data || body;\n  const executionError = responseData.execution_error || null;\n  const ok = body.ok !== false && body.ok !== 'false'; // Puede ser string \"false\"\n  \n  if (executionError || !ok) {\n    console.log('ADVERTENCIA: Entry aceptado con errores:', executionError);\n    return [[], [{ \n      json: { \n        ...data, \n        action: 'entry_error',\n        state: 'ERROR',\n        execution_error: executionError,\n        replyMessage: '⚠️ Tu compra está registrada pero está en revisión manual. Recibirás los puntos una vez que sea aprobada por el equipo.'\n      } \n    }]];\n  }\n  \n  // Success completo\n  console.log('✓ Entry aceptado exitosamente');\n  \n  const session = data.session || {};\n  session.state = 'FINISHED';\n  \n  return [{ \n    json: { \n      ...data, \n      session,\n      action: 'entry_accepted'\n    } \n  }], [];\n}\n\n// Respuesta inesperada\nconsole.log('ERROR: Respuesta inesperada del servidor');\nreturn [[], [{ \n  json: { \n    ...data, \n    action: 'unexpected_response',\n    state: 'ERROR',\n    replyMessage: 'Ocurrió un error inesperado. Por favor intenta de nuevo.'\n  } \n}]];\n"
-      },
-      "id": "a27b7053-38c5-4339-a402-0839b560c002",
-      "name": "Entry Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        400,
-        3904
-      ],
-      "notesPos": "right",
-      "notes": "Routes entry acceptance result. Output 0=200 (ok → Points Builder). Output 1=fallback (error → ERROR)."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Points Builder\n// Builds final FINISHED message. Points come from /retail/buy invoice response.\n\nconst data = $input.first().json;\nconst session = data.session ? { ...data.session } : {};\nconst body = data.body || {};\n\nconst accepted = body.ok === 'true' || body.ok === true || body.data?.state === 'success';\nif (body.data?.execution_error || !accepted) {\n  session.state = 'ERROR';\n  return [{\n    json: {\n      ...data,\n      session,\n      action: 'entry_accept_failed',\n      replyMessage: 'Tu compra quedo registrada, pero la aprobacion automatica quedo en revision manual. Te avisaremos cuando se apruebe.'\n    }\n  }];\n}\n\nconst pointsAwarded = Number(session.purchase_points || session.points_awarded || 0);\nconst totalPoints = Number(session.total_points || 0);\nsession.state = 'FINISHED';\nsession.retry_count = 0;\n\nconst replyMessage = '🎉 ¡Listo! Tu ticket fue aprobado.\\n\\nPuntos ganados por esta compra: ' + pointsAwarded + '\\nTotal de puntos disponibles/acumulados: ' + totalPoints + '\\n\\nGracias por participar en la promocion de Superlikers.';\n\nreturn [{\n  json: {\n    ...data,\n    session,\n    points_awarded: pointsAwarded,\n    total_points: totalPoints,\n    action: 'finished',\n    replyMessage\n  }\n}];\n"
-      },
-      "id": "cddd66ae-cfde-4219-aae3-c3687a34ab8e",
-      "name": "Points Builder",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        400,
-        4208
-      ],
-      "notesPos": "right",
-      "notes": "Builds final WhatsApp text using /retail/buy invoice.points and participant point summary; /entries/accept only confirms moderation state in official docs."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Format Log Entry\n// Builds a 7-field log entry object from session data for Google Sheets logging.\n\nconst data = $input.first().json;\nconst session = data.session || {};\nconst phone = session.phone || '';\nconst createdAt = session.created_at || new Date().toISOString();\nconst conversationId = phone.replace(/\\D/g, '') + '_' + createdAt.replace(/[^0-9]/g, '');\nconst invoiceRef = session.invoice_ref || session.invoice_data?.ref || 'N/A';\nconst points = data.points_awarded || session.purchase_points || session.points_awarded || 0;\n\nconst logEntry = {\n  conversation_id: conversationId,\n  phone,\n  email: session.email || session.distinct_id || '',\n  invoice_ref: invoiceRef,\n  points,\n  status: session.state || 'UNKNOWN',\n  timestamp: new Date().toISOString()\n};\n\nreturn [{ json: { ...data, log_entry: logEntry } }];\n"
-      },
-      "id": "533e794a-05ed-4cda-9084-d2e42902bdf0",
-      "name": "Format Log Entry",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        400,
-        4512
-      ],
-      "notesPos": "right",
-      "notes": "Formats a 7-field log entry from session data for observability logging. Fields: conversation_id, phone, email, invoice_ref, points, status, timestamp."
-    },
-    {
-      "parameters": {
-        "operation": "append",
-        "documentId": "={{ $env.GOOGLE_SHEETS_SPREADSHEET_ID }}",
-        "sheetName": "={{ \"Logs\" }}",
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "conversation_id": "={{ $json.log_entry.conversation_id }}",
-            "phone": "={{ $json.log_entry.phone }}",
-            "email": "={{ $json.log_entry.email }}",
-            "invoice_ref": "={{ $json.log_entry.invoice_ref }}",
-            "points": "={{ $json.log_entry.points }}",
-            "status": "={{ $json.log_entry.status }}",
-            "timestamp": "={{ $json.log_entry.timestamp }}"
-          }
+            "points": 0,
+            "retry_count": 0,
+            "participant_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+            "name": "={{ $('Telegram Trigger').item.json.message.chat.first_name }}",
+            "updated_at": "={{ $now }}",
+            "created_at": "={{ $today }}",
+            "step": "wait_phone",
+            "phone": "={{ $('Telegram Trigger').item.json.message.contact.phone_number }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "session_key",
+              "displayName": "session_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_id",
+              "displayName": "participant_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distinct_id",
+              "displayName": "distinct_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "entry_id",
+              "displayName": "entry_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_id",
+              "displayName": "photo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_url",
+              "displayName": "photo_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_ref",
+              "displayName": "invoice_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_data",
+              "displayName": "invoice_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "points",
+              "displayName": "points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_exists",
+              "displayName": "participant_exists",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {}
       },
-      "id": "693f38e8-e4e5-4309-8989-ea14f92fa4c2",
-      "name": "Log to Sheets",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4,
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
       "position": [
-        400,
-        4800
+        -304,
+        880
       ],
-      "retryOnFail": false,
-      "alwaysOutputData": true,
-      "notesPos": "right",
+      "id": "89d4f218-7cb7-4db8-b1e5-52cbab876935",
+      "name": "Insert row"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "353bec75-5a6c-4a0c-994a-30f73d53a334",
+              "leftValue": "={{$json.object.email}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -160,
+        656
+      ],
+      "id": "33ec437a-bdda-4e12-8e08-349da32c99d7",
+      "name": "If",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "Necesito tu Nombre",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        192,
+        592
+      ],
+      "id": "6b70d858-6cf4-49f0-a50c-4fc4dd7f3aca",
+      "name": "Pedir nombre",
+      "webhookId": "392e88d5-de27-4e1d-b9dc-e910ef6d5913",
       "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "hwvLK6RV7BWfUMR1",
-          "name": "Google Sheets account"
+        "telegramApi": {
+          "id": "b4unBNxGc9bU0vnW",
+          "name": "Telegram account"
         }
-      },
-      "onError": "continueRegularOutput",
-      "notes": "Appends a log entry row to Google Sheets. Runs with onError=continueRegularOutput so logging failures never block the main flow."
+      }
     },
     {
       "parameters": {
-        "jsCode": "// Rename Binary\n// Superlikers /photos expects multipart field name upload_photo.\n\nconst items = $input.all();\nreturn items.map(item => {\n  if (item.binary && item.binary.data) {\n    item.binary.upload_photo = item.binary.data;\n    delete item.binary.data;\n  }\n  return item;\n});\n"
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "points": 0,
+            "retry_count": 0,
+            "participant_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+            "name": "={{ $('Telegram Trigger').item.json.message.chat.first_name }}",
+            "updated_at": "={{ $now }}",
+            "created_at": "={{ $today }}",
+            "step": "wait_phone",
+            "phone": "={{ $('Telegram Trigger').item.json.message.contact.phone_number }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "session_key",
+              "displayName": "session_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_id",
+              "displayName": "participant_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distinct_id",
+              "displayName": "distinct_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "entry_id",
+              "displayName": "entry_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_id",
+              "displayName": "photo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_url",
+              "displayName": "photo_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_ref",
+              "displayName": "invoice_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_data",
+              "displayName": "invoice_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "points",
+              "displayName": "points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_exists",
+              "displayName": "participant_exists",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
       },
-      "id": "797a4427-2725-4a77-9d7a-7c9947f6f5a5",
-      "name": "Rename Binary",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
       "position": [
-        0,
-        2864
+        192,
+        752
       ],
-      "notesPos": "right",
-      "notes": "Renames WhatsApp binary file to upload_photo, the official Superlikers /photos multipart field."
+      "id": "898ecd7b-6a3b-4f2a-bec4-fddca5888876",
+      "name": "Insertar distinct_id"
     },
     {
       "parameters": {
-        "mode": "expression",
-        "output": "={{ $json.shouldSendWhatsApp ? 0 : 1 }}",
-        "outputsAmount": 2
-      },
-      "id": "f23fbd60-dbf1-416e-a025-5bb02e751f32",
-      "name": "Should Send WhatsApp",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 2,
-      "position": [
-        1056,
-        1856
-      ],
-      "notesPos": "right",
-      "notes": "Routes normal user replies to WhatsApp Cloud API and verification/status payloads directly to webhook response."
-    },
-    {
-      "parameters": {
-        "authentication": "none",
-        "requestMethod": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "url": "https://api.superlikerslabs.com/v1/participants/search",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $env.WHATSAPP_TOKEN }}"
+              "value": "Bearer 8a728b9da584daac04ad176b03131dfe"
             }
           ]
         },
         "sendBody": true,
-        "contentType": "application/json",
-        "body": "={{ JSON.stringify({\n  messaging_product: 'whatsapp',\n  recipient_type: 'individual',\n  to: $json.to,\n  type: 'text',\n  text: {\n    body: $json.text.body\n  }\n}) }}",
-        "options": {
-          "timeout": 15000
-        }
-      },
-      "id": "780db08a-e9b5-46f7-b966-f2fe0ecd5d39",
-      "name": "Send WhatsApp Message",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 2,
-      "position": [
-        1040,
-        2512
-      ],
-      "notesPos": "right",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "z66VYMo2NnAQ",
-          "name": "WhatsApp Bearer"
-        }
-      },
-      "notes": "Sends outbound text through WhatsApp Cloud API. Requires WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_TOKEN."
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "={{ $json.webhookResponseBody || JSON.stringify({ ok: true }) }}",
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"api_key\": \"8a728b9da584daac04ad176b03131dfe\",\n  \"campaign\": \"3z\",\n  \"query\": {\n    \"cellphone\": \"3187592616\"\n  }\n}",
         "options": {}
       },
-      "id": "9aa90f4d-3118-4605-89a5-42359398f85b",
-      "name": "Respond Webhook OK",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
       "position": [
-        1344,
-        2512
+        -304,
+        656
       ],
-      "notesPos": "right",
-      "notes": "Returns 200 JSON after outbound WhatsApp send so Meta does not retry the webhook."
+      "id": "d8c7898d-0967-4e97-9fe8-baa84f222396",
+      "name": "Buscar participante",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "const data = $input.first().json;\nif (data.isVerification) return [{ json: { ...data, session: null, sessionKey: null } }];\nif (data.isStatusUpdate) return [{ json: { ...data, session: null, sessionKey: null } }];\nconst phone = data.phone;\nif (!phone) return [{ json: { ...data, session: null, sessionKey: null, error: 'No phone number provided' } }];\nconst sessionKey = `session:${phone}`;\nreturn [{ json: { ...data, sessionKey } }];"
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "participant_exists": false,
+            "name": "={{ $json.result.text }}",
+            "points": 0,
+            "retry_count": 0,
+            "participant_id": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "session_key",
+              "displayName": "session_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distinct_id",
+              "displayName": "distinct_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "entry_id",
+              "displayName": "entry_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_id",
+              "displayName": "photo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_url",
+              "displayName": "photo_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_ref",
+              "displayName": "invoice_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_data",
+              "displayName": "invoice_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "points",
+              "displayName": "points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_exists",
+              "displayName": "participant_exists",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_id",
+              "displayName": "participant_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
       },
-      "id": "2d762e13-2070-4550-a98e-c98a224a5d23",
-      "name": "Session Loader",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
       "position": [
-        0,
-        608
-      ]
+        336,
+        592
+      ],
+      "id": "d1cfd03f-eb35-424b-91f4-4545b00b4d1c",
+      "name": "Guardar nombre"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "Necesito tu Email",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        592
+      ],
+      "id": "7980159c-ce54-4481-b2dd-e1bb797a0337",
+      "name": "Pedir email",
+      "webhookId": "392e88d5-de27-4e1d-b9dc-e910ef6d5913",
+      "credentials": {
+        "telegramApi": {
+          "id": "b4unBNxGc9bU0vnW",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "participant_exists": false,
+            "name": "=",
+            "points": 0,
+            "retry_count": 0,
+            "participant_id": 0,
+            "email": "={{ $json.result.text }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "session_key",
+              "displayName": "session_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distinct_id",
+              "displayName": "distinct_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "entry_id",
+              "displayName": "entry_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_id",
+              "displayName": "photo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_url",
+              "displayName": "photo_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_ref",
+              "displayName": "invoice_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_data",
+              "displayName": "invoice_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "points",
+              "displayName": "points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_exists",
+              "displayName": "participant_exists",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_id",
+              "displayName": "participant_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        352
+      ],
+      "id": "57d68f6f-8671-48f4-8136-f39d4518e52e",
+      "name": "Guardar email"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Guardar email').item.json.id }}",
+        "text": "Confirma datos",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        944,
+        352
+      ],
+      "id": "4033b79d-7e7f-4184-976d-11080b9031de",
+      "name": "Resumen de datos",
+      "webhookId": "712cae68-d568-472f-9acb-ff96045981be",
+      "credentials": {
+        "telegramApi": {
+          "id": "b4unBNxGc9bU0vnW",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendChatAction",
+        "chatId": "={{ $json.result.chat.id }}",
+        "action": "record_video_note"
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1088,
+        352
+      ],
+      "id": "2f14f9be-84ef-48c5-8dd5-fddda8c6d1af",
+      "name": "Confirmar datos",
+      "webhookId": "6c682dec-d994-42b2-a210-80e70ebafba0",
+      "credentials": {
+        "telegramApi": {
+          "id": "b4unBNxGc9bU0vnW",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.superlikerslabs.com/v1/participants",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 8a728b9da584daac04ad176b03131dfe"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"api_key\": \"8a728b9da584daac04ad176b03131dfe\",\n  \"campaign\": \"3z\",\n  \"query\": {\n    \"cellphone\": \"3187592616\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1232,
+        352
+      ],
+      "id": "f4a048bf-52d6-4de5-93d6-95c3d69e3f6d",
+      "name": "Buscar participante1",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "353bec75-5a6c-4a0c-994a-30f73d53a334",
+              "leftValue": "={{$json.object.email}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        624,
+        592
+      ],
+      "id": "c1ed8098-8b7d-4894-a34d-12b8a90eea86",
+      "name": "Validar email1",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "Verifica tu correo",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        800,
+        592
+      ],
+      "id": "e37d98ab-3373-4ead-aa94-2521a2f823c9",
+      "name": "Correo invalido",
+      "webhookId": "392e88d5-de27-4e1d-b9dc-e910ef6d5913",
+      "credentials": {
+        "telegramApi": {
+          "id": "b4unBNxGc9bU0vnW",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ocr.space/parse/image",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "K88552433188957"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5b76c139-19e5-4144-a17b-6299e3f00dc4",
+      "name": "Analyze Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        496,
+        752
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawText = $json.ParsedResults[0].ParsedText || \"\";\nconst cleaned = rawText.replace(/\\r/g, \"\").replace(/\\\\n/g, \"\\n\");\nconst lines = cleaned.split(\"\\n\").map(l => l.trim()).filter(Boolean);\n\n// ─── FECHA ───────────────────────────────────────────────\nlet invoiceDate = null;\nconst fechaLine = lines.find(line => line.toLowerCase().startsWith(\"fecha:\"));\nif (fechaLine) {\n  const match = fechaLine.match(/(\\d{2}\\/\\d{2}\\/\\d{4})/);\n  if (match) invoiceDate = match[1];\n}\n\n// ─── NÚMERO DE FACTURA ───────────────────────────────────\n// El OCR parte \"FESF\" y \"447123\" en líneas distintas\nlet invoiceNumber = null;\nfor (let i = 0; i < lines.length; i++) {\n  const line = lines[i];\n  if (line.toUpperCase().includes(\"FACT ELECTRONICA DE VENTA:\")) {\n    // Intenta extraer en la misma línea\n    const same = line.match(/FESF[\\s\\-]*(\\d+)/i);\n    if (same) { invoiceNumber = \"FESF-\" + same[1]; break; }\n    // Si no, busca en las siguientes dos líneas\n    for (let j = i + 1; j <= i + 2 && j < lines.length; j++) {\n      const next = lines[j];\n      const m = next.match(/(\\d{4,})/);\n      if (m) { invoiceNumber = \"FESF-\" + m[1]; break; }\n    }\n    break;\n  }\n}\n\n// ─── MONTO TOTAL ─────────────────────────────────────────\n// Busca la línea que tenga \"$ 6.699\" o similar (patrón: $ seguido de dígitos/puntos/comas)\n// Prioridad: línea que contenga \"$ X.XXX\" después de SUB TOTAL / antes del fin\nlet amount = null;\n\n// 1) Buscar línea explícita con signo $ y número (ej: \"$ 6.699\")\nfor (let i = 0; i < lines.length; i++) {\n  const m = lines[i].match(/^\\$\\s*([\\d.,]+)$/);\n  if (m) { amount = m[1]; break; }\n}\n\n// 2) Si no encontró, buscar dentro de cualquier línea \"$ XXXX\"\nif (!amount) {\n  for (let i = 0; i < lines.length; i++) {\n    const m = lines[i].match(/\\$\\s*([\\d]{1,3}(?:[.,]\\d{3})+(?:[.,]\\d{1,2})?)/);\n    if (m) { amount = m[1]; break; }\n  }\n}\n\n// 3) Fallback: valor numérico en la línea justo después de \"SUB TOTAL:\"\nif (!amount) {\n  const subIdx = lines.findIndex(l => l.toLowerCase().includes(\"sub total:\"));\n  if (subIdx !== -1) {\n    // Puede estar en la misma línea o en la siguiente\n    const same = lines[subIdx].match(/:\\s*([\\d.,]+)/);\n    if (same) { amount = same[1]; }\n    else if (subIdx + 1 < lines.length) {\n      const m = lines[subIdx + 1].match(/^[\\d.,]+$/);\n      if (m) amount = lines[subIdx + 1];\n    }\n  }\n}\n\n// ─── MÉTODO DE PAGO ───────────────────────────────────────\nlet paymentMethod = \"\";\nconst pagoLine = lines.find(line => line.toLowerCase().includes(\"tipo pago:\"));\nif (pagoLine) {\n  const parts = pagoLine.split(\":\");\n  if (parts.length > 1) paymentMethod = parts[1].trim();\n}\n\n// ─── NOTAS ────────────────────────────────────────────────\nlet notes = \"No tenias notas pendientes\";\nconst notaIndex = lines.findIndex(l => l.toLowerCase().includes(\"nota adicional:\"));\nif (notaIndex !== -1) {\n  const notaParts = lines[notaIndex].split(\":\");\n  if (notaParts.length > 1 && notaParts[1].trim()) {\n    notes = notaParts[1].trim();\n  } else if (notaIndex + 1 < lines.length) {\n    // Toma la siguiente línea solo si no es un encabezado de sección\n    const next = lines[notaIndex + 1];\n    if (!next.startsWith(\"-\") && !next.toUpperCase().includes(\"PRODUCTO\")) {\n      notes = next;\n    }\n  }\n}\n\n// ─── NIT / CLIENTE ───────────────────────────────────────\nlet clientName = \"\";\nlet clientNit = \"\";\nconst clienteLine = lines.find(l => l.toUpperCase().startsWith(\"CLIENTE:\"));\nif (clienteLine) {\n  const m = clienteLine.match(/CLIENTE:\\s*(.+?)\\s+CC\\/NIT\\s*:\\s*([\\d]+)/i);\n  if (m) { clientName = m[1].trim(); clientNit = m[2].trim(); }\n}\n\nreturn [{\n  json: {\n    InvoiceNumber: invoiceNumber,\n    InvoiceDate:   invoiceDate,\n    DueDate:       null,\n    Amount:        amount,\n    PaymentMethod: paymentMethod,\n    Notes:         notes,\n    ClientName:    clientName,\n    ClientNit:     clientNit,\n  }\n}];"
+      },
+      "id": "6e22b1af-c69c-4a15-adee-8e5e42f1d820",
+      "name": "Parse Text",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        640,
+        752
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"Telegram Trigger\").item.json.message.chat.id }}",
+        "text": "=Pásame otra foto",
+        "additionalFields": {}
+      },
+      "id": "a1e214f9-5fb6-4a3a-be64-c265d966bf01",
+      "name": "Pedir nueva foto",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2192,
+        480
+      ],
+      "webhookId": "56f1c733-7ccb-43a3-ad9f-0192118b9992",
+      "credentials": {
+        "telegramApi": {
+          "id": "b4unBNxGc9bU0vnW",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.superlikerslabs.com/v1/retail/buy",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 8a728b9da584daac04ad176b03131dfe"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"api_key\": \"8a728b9da584daac04ad176b03131dfe\",\n  \"campaign\": \"3z\",\n  \"query\": {\n    \"cellphone\": \"3187592616\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2192,
+        288
+      ],
+      "id": "d52d47a6-19b4-4fd9-9f12-d0a74f4f89d0",
+      "name": "Guardar foto",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "mode": "id",
-          "value": "FC5MNmCdMRxxqRVD"
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
         },
-        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "session_key",
-              "keyValue": "={{ $json.sessionKey }}"
+              "keyName": "participant_id",
+              "keyValue": "={{ $json.message.chat.id }}"
             }
           ]
-        },
-        "limit": 1
+        }
       },
-      "id": "d3c0aeb1-bc09-4594-be88-f0274248733a",
-      "name": "Session Load",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        800,
-        608
+        -1264,
+        752
       ],
+      "id": "c94f6f36-6f03-42dc-97f3-78f074b26a1b",
+      "name": "Buscar sesión",
       "alwaysOutputData": true
     },
     {
       "parameters": {
-        "mode": "combine",
-        "combineBy": "combineByPosition",
-        "options": {}
-      },
-      "id": "3f250d5d-9a8e-4e04-8e31-e2d5e508d911",
-      "name": "Merge Session",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        400,
-        800
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const merged = $input.first().json;\nif (merged.isVerification || merged.isStatusUpdate || merged.sessionKey === null) {\n  return [{ json: { ...merged, session: null } }];\n}\nconst now = new Date();\nconst sessionKey = merged.sessionKey || '';\nlet session = null;\nif (merged.session_key) {\n  const ts = merged.updated_at || merged.created_at || now.toISOString();\n  const updatedAt = new Date(ts).getTime();\n  if (now.getTime() - updatedAt < 30 * 60 * 1000) {\n    session = {\n      phone: merged.phone || '',\n      local_phone: merged.local_phone || '',\n      name: merged.name || '',\n      email: merged.email || '',\n      distinct_id: merged.distinct_id || '',\n      state: merged.state || 'START',\n      participant_id: merged.participant_id || '',\n      entry_id: merged.entry_id || '',\n      photo_url: merged.photo_url || '',\n      invoice_ref: merged.invoice_ref || '',\n      invoice_data: (() => { try { return JSON.parse(merged.invoice_data || '{}'); } catch(e) { return {}; } })(),\n      purchase_points: Number(merged.purchase_points || 0),\n      promotion_points: Number(merged.promotion_points || 0),\n      total_points: Number(merged.total_points || 0),\n      retry_count: Number(merged.retry_count || 0),\n      created_at: merged.created_at || now.toISOString(),\n      updated_at: now.toISOString()\n    };\n  }\n}\nif (!session) {\n  session = {\n    phone: merged.phone || '', local_phone: '', name: '', email: '', distinct_id: '',\n    state: 'START', participant_id: '', entry_id: '', photo_url: '', invoice_ref: '',\n    invoice_data: {}, purchase_points: 0, promotion_points: 0, total_points: 0,\n    retry_count: 0, created_at: now.toISOString(), updated_at: now.toISOString()\n  };\n}\nreturn [{ json: { ...merged, session, sessionKey } }];"
-      },
-      "id": "a181186e-9d7e-4f68-8cb0-e6774093aec9",
-      "name": "Session Normalizer",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        0,
-        1008
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "upsert",
-        "dataTableId": {
-          "__rl": true,
-          "mode": "id",
-          "value": "FC5MNmCdMRxxqRVD"
-        },
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
+        "rules": {
+          "values": [
             {
-              "keyName": "session_key",
-              "keyValue": "={{ $json.session_key }}"
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.participant_exists }}",
+                    "rightValue": "={{ $('Telegram Trigger').item.json.message.reply_to_message.from.id }}",
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    },
+                    "id": "734b4482-b247-4b65-98ad-50198fcf9e11"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "dd3329d1-fdb1-4725-ab82-08d51236b634",
+                    "leftValue": "={{ $json.participant_id }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "number",
+                      "operation": "empty",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
             }
           ]
         },
-        "columns": {
-          "mappingMode": "autoMapInputData",
-          "value": null
-        },
         "options": {}
       },
-      "id": "e95e6ce2-e2af-4e5d-a862-1a097a8c672d",
-      "name": "Save Session",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
       "position": [
-        800,
-        1408
-      ]
+        -1120,
+        752
+      ],
+      "id": "80681695-1017-4ad0-b1f9-7879365c93d6",
+      "name": "¿Existe sesión?"
     },
     {
       "parameters": {
-        "jsCode": "const d = $input.first().json;\nconst s = d.session || {};\nconst sk = d.sessionKey || `session:${s.phone || d.phone || ''}`;\nreturn [{json:{session_key: sk, state: s.state || '',\n  phone: s.phone || d.phone || '', local_phone: s.local_phone || '',\n  name: s.name || '', email: s.email || '', distinct_id: s.distinct_id || '',\n  participant_id: s.participant_id || '', entry_id: s.entry_id || '',\n  photo_url: s.photo_url || '', invoice_ref: s.invoice_ref || '',\n  invoice_data: JSON.stringify(s.invoice_data || {}),\n  purchase_points: Number(s.purchase_points || 0),\n  promotion_points: Number(s.promotion_points || 0),\n  total_points: Number(s.total_points || 0),\n  retry_count: Number(s.retry_count || 0),\n  created_at: s.created_at || '', updated_at: s.updated_at || new Date().toISOString()}}];"
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "participant_exists": false,
+            "participant_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+            "points": 0,
+            "retry_count": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "session_key",
+              "displayName": "session_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distinct_id",
+              "displayName": "distinct_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "entry_id",
+              "displayName": "entry_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_id",
+              "displayName": "photo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_url",
+              "displayName": "photo_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_ref",
+              "displayName": "invoice_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_data",
+              "displayName": "invoice_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "points",
+              "displayName": "points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_exists",
+              "displayName": "participant_exists",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_id",
+              "displayName": "participant_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
       },
-      "id": "d2f67845-bfe2-489b-848f-cb371249da60",
-      "name": "Flatten Session",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
       "position": [
-        608,
-        1408
-      ]
+        -896,
+        672
+      ],
+      "id": "ad808e9d-4264-42af-a46c-88d3ca276853",
+      "name": "Crear sesión"
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -752,
+        672
+      ],
+      "id": "5b9636e6-5664-4465-bb4a-41082b0b6ee9",
+      "name": "Bienvenida",
+      "webhookId": "b5ea4b04-b6db-4804-a8b1-4d9d2e817ecf",
+      "alwaysOutputData": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "b4unBNxGc9bU0vnW",
+          "name": "Telegram account"
+        }
+      }
     },
     {
       "parameters": {
@@ -823,7 +1614,7 @@
           "conditions": [
             {
               "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-              "leftValue": "={{ $json.valid }}",
+              "leftValue": "={{\n  /^57(3\\d{9})$/.test(\n    ($json.message.contact?.phone_number ?? $json.message.text ?? \"\")\n      .replace(/\\D/g, \"\")\n  )\n}}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -835,634 +1626,1077 @@
         },
         "options": {}
       },
-      "id": "e4a2d0f0-0b46-4c0f-b10f-132cfc946f56",
-      "name": "Phone Valid?",
+      "id": "12d867e0-fd93-4f06-8b05-9aa058bca20b",
+      "name": "Validar",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        400,
-        80
+        -464,
+        672
       ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8994667126:AAELpj80MEEEI7FHTutjP0KyO9O7GQ8-MuY/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"{{$json.result.id}}\",\n  \"text\": \"¡Hola! 👋 Bienvenido a la campaña. Para empezar, escríbeme tu número de celular (solo números).\",\n  \"reply_markup\": {\n    \"keyboard\": [\n      [\n        {\n          \"text\": \"📱 Compartir teléfono\",\n          \"request_contact\": true\n        }\n      ]\n    ],\n    \"resize_keyboard\": true,\n    \"one_time_keyboard\": true\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -608,
+        672
+      ],
+      "id": "2e635335-25d5-4683-a4a5-90fb01defc69",
+      "name": "Esperar Teléfono"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "points": 0,
+            "retry_count": 0,
+            "participant_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+            "name": "={{ $('Telegram Trigger').item.json.message.chat.first_name }}",
+            "updated_at": "={{ $now }}",
+            "created_at": "={{ $today }}",
+            "step": "wait_phone",
+            "phone": "={{ $('Telegram Trigger').item.json.message.contact.phone_number }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "session_key",
+              "displayName": "session_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_id",
+              "displayName": "participant_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distinct_id",
+              "displayName": "distinct_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "entry_id",
+              "displayName": "entry_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_id",
+              "displayName": "photo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_url",
+              "displayName": "photo_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_ref",
+              "displayName": "invoice_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_data",
+              "displayName": "invoice_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "points",
+              "displayName": "points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_exists",
+              "displayName": "participant_exists",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -896,
+        848
+      ],
+      "id": "596d564f-6a11-4cda-9286-006f1754b693",
+      "name": "Leer Step"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.participant_exists }}",
+                    "rightValue": "={{ $('Telegram Trigger').item.json.message.reply_to_message.from.id }}",
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    },
+                    "id": "734b4482-b247-4b65-98ad-50198fcf9e11"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "dd3329d1-fdb1-4725-ab82-08d51236b634",
+                    "leftValue": "={{ $json.participant_id }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "number",
+                      "operation": "empty",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -736,
+        848
+      ],
+      "id": "e7c73dc8-7ca4-4a99-bb82-97447480576a",
+      "name": "Switch(step)"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.photo[$json.message.photo.length - 1].file_id }}",
+        "additionalFields": {}
+      },
+      "id": "3cc28103-6fff-4d06-a9cd-b87055d3be27",
+      "name": "Pedir Foto",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        352,
+        752
+      ],
+      "webhookId": "8c2e9cc6-18b2-42b6-87f5-5f23e7633ce1",
+      "credentials": {
+        "telegramApi": {
+          "id": "b4unBNxGc9bU0vnW",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawText = $json.ParsedResults[0].ParsedText || \"\";\nconst cleaned = rawText.replace(/\\r/g, \"\").replace(/\\\\n/g, \"\\n\");\nconst lines = cleaned.split(\"\\n\").map(l => l.trim()).filter(Boolean);\n\n// ─── FECHA ───────────────────────────────────────────────\nlet invoiceDate = null;\nconst fechaLine = lines.find(line => line.toLowerCase().startsWith(\"fecha:\"));\nif (fechaLine) {\n  const match = fechaLine.match(/(\\d{2}\\/\\d{2}\\/\\d{4})/);\n  if (match) invoiceDate = match[1];\n}\n\n// ─── NÚMERO DE FACTURA ───────────────────────────────────\n// El OCR parte \"FESF\" y \"447123\" en líneas distintas\nlet invoiceNumber = null;\nfor (let i = 0; i < lines.length; i++) {\n  const line = lines[i];\n  if (line.toUpperCase().includes(\"FACT ELECTRONICA DE VENTA:\")) {\n    // Intenta extraer en la misma línea\n    const same = line.match(/FESF[\\s\\-]*(\\d+)/i);\n    if (same) { invoiceNumber = \"FESF-\" + same[1]; break; }\n    // Si no, busca en las siguientes dos líneas\n    for (let j = i + 1; j <= i + 2 && j < lines.length; j++) {\n      const next = lines[j];\n      const m = next.match(/(\\d{4,})/);\n      if (m) { invoiceNumber = \"FESF-\" + m[1]; break; }\n    }\n    break;\n  }\n}\n\n// ─── MONTO TOTAL ─────────────────────────────────────────\n// Busca la línea que tenga \"$ 6.699\" o similar (patrón: $ seguido de dígitos/puntos/comas)\n// Prioridad: línea que contenga \"$ X.XXX\" después de SUB TOTAL / antes del fin\nlet amount = null;\n\n// 1) Buscar línea explícita con signo $ y número (ej: \"$ 6.699\")\nfor (let i = 0; i < lines.length; i++) {\n  const m = lines[i].match(/^\\$\\s*([\\d.,]+)$/);\n  if (m) { amount = m[1]; break; }\n}\n\n// 2) Si no encontró, buscar dentro de cualquier línea \"$ XXXX\"\nif (!amount) {\n  for (let i = 0; i < lines.length; i++) {\n    const m = lines[i].match(/\\$\\s*([\\d]{1,3}(?:[.,]\\d{3})+(?:[.,]\\d{1,2})?)/);\n    if (m) { amount = m[1]; break; }\n  }\n}\n\n// 3) Fallback: valor numérico en la línea justo después de \"SUB TOTAL:\"\nif (!amount) {\n  const subIdx = lines.findIndex(l => l.toLowerCase().includes(\"sub total:\"));\n  if (subIdx !== -1) {\n    // Puede estar en la misma línea o en la siguiente\n    const same = lines[subIdx].match(/:\\s*([\\d.,]+)/);\n    if (same) { amount = same[1]; }\n    else if (subIdx + 1 < lines.length) {\n      const m = lines[subIdx + 1].match(/^[\\d.,]+$/);\n      if (m) amount = lines[subIdx + 1];\n    }\n  }\n}\n\n// ─── MÉTODO DE PAGO ───────────────────────────────────────\nlet paymentMethod = \"\";\nconst pagoLine = lines.find(line => line.toLowerCase().includes(\"tipo pago:\"));\nif (pagoLine) {\n  const parts = pagoLine.split(\":\");\n  if (parts.length > 1) paymentMethod = parts[1].trim();\n}\n\n// ─── NOTAS ────────────────────────────────────────────────\nlet notes = \"No tenias notas pendientes\";\nconst notaIndex = lines.findIndex(l => l.toLowerCase().includes(\"nota adicional:\"));\nif (notaIndex !== -1) {\n  const notaParts = lines[notaIndex].split(\":\");\n  if (notaParts.length > 1 && notaParts[1].trim()) {\n    notes = notaParts[1].trim();\n  } else if (notaIndex + 1 < lines.length) {\n    // Toma la siguiente línea solo si no es un encabezado de sección\n    const next = lines[notaIndex + 1];\n    if (!next.startsWith(\"-\") && !next.toUpperCase().includes(\"PRODUCTO\")) {\n      notes = next;\n    }\n  }\n}\n\n// ─── NIT / CLIENTE ───────────────────────────────────────\nlet clientName = \"\";\nlet clientNit = \"\";\nconst clienteLine = lines.find(l => l.toUpperCase().startsWith(\"CLIENTE:\"));\nif (clienteLine) {\n  const m = clienteLine.match(/CLIENTE:\\s*(.+?)\\s+CC\\/NIT\\s*:\\s*([\\d]+)/i);\n  if (m) { clientName = m[1].trim(); clientNit = m[2].trim(); }\n}\n\nreturn [{\n  json: {\n    InvoiceNumber: invoiceNumber,\n    InvoiceDate:   invoiceDate,\n    DueDate:       null,\n    Amount:        amount,\n    PaymentMethod: paymentMethod,\n    Notes:         notes,\n    ClientName:    clientName,\n    ClientNit:     clientNit,\n  }\n}];"
+      },
+      "id": "179f5dd2-2d09-4009-b9e1-70f238e444d1",
+      "name": "Parse Text1",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1728,
+        352
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.photo[$json.message.photo.length - 1].file_id }}",
+        "additionalFields": {}
+      },
+      "id": "1be5c057-2072-4e2b-a649-741d65bca668",
+      "name": "Pedir Foto1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1408,
+        352
+      ],
+      "webhookId": "8c2e9cc6-18b2-42b6-87f5-5f23e7633ce1",
+      "credentials": {
+        "telegramApi": {
+          "id": "b4unBNxGc9bU0vnW",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.superlikerslabs.com/v1/entries/accept",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 8a728b9da584daac04ad176b03131dfe"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"api_key\": \"8a728b9da584daac04ad176b03131dfe\",\n  \"campaign\": \"3z\",\n  \"query\": {\n    \"cellphone\": \"3187592616\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2352,
+        288
+      ],
+      "id": "2aff9317-0abf-4e29-bb8c-e8ca4e6b598a",
+      "name": "POST /photos",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ocr.space/parse/image",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "K88552433188957"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "64d69a3a-638b-484b-956d-97aa09ce9f03",
+      "name": "GPT Vision OCR",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1584,
+        352
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "353bec75-5a6c-4a0c-994a-30f73d53a334",
+              "leftValue": "={{$json.object.email}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1904,
+        352
+      ],
+      "id": "ce9f92a6-7b07-4b14-9631-d761dc1e8f72",
+      "name": "¿Factura legible?",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"Telegram Trigger\").item.json.message.chat.id }}",
+        "text": "=🎉 Ganaste 250 puntos",
+        "additionalFields": {}
+      },
+      "id": "3e73e1ac-baa4-4e66-b89f-2ab464318dbe",
+      "name": "🎉 Ganaste puntos",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2528,
+        288
+      ],
+      "webhookId": "56f1c733-7ccb-43a3-ad9f-0192118b9992",
+      "credentials": {
+        "telegramApi": {
+          "id": "b4unBNxGc9bU0vnW",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "participant_exists": false,
+            "name": "=",
+            "points": 0,
+            "retry_count": 0,
+            "participant_id": 0,
+            "email": "={{ $json.result.text }}",
+            "step": "Completed"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "session_key",
+              "displayName": "session_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distinct_id",
+              "displayName": "distinct_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "entry_id",
+              "displayName": "entry_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_id",
+              "displayName": "photo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_url",
+              "displayName": "photo_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_ref",
+              "displayName": "invoice_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_data",
+              "displayName": "invoice_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "points",
+              "displayName": "points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_exists",
+              "displayName": "participant_exists",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "participant_id",
+              "displayName": "participant_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2688,
+        288
+      ],
+      "id": "00a86f55-8970-4ccd-8abb-0f650ffd9a4d",
+      "name": "step = completed"
     }
   ],
   "connections": {
-    "WhatsApp Webhook": {
+    "Telegram Trigger": {
       "main": [
         [
           {
-            "node": "Message Parser",
+            "node": "Buscar sesión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert row": {
+      "main": [
+        []
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Pedir nombre",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Message Parser",
+            "node": "Insertar distinct_id",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Welcome Handler": {
+    "Pedir nombre": {
       "main": [
         [
           {
-            "node": "Session Update",
+            "node": "Guardar nombre",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Search Participant": {
+    "Insertar distinct_id": {
       "main": [
         [
           {
-            "node": "Participant Exists",
+            "node": "Pedir Foto",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Name Handler": {
+    "Buscar participante": {
       "main": [
         [
           {
-            "node": "Session Update",
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar nombre": {
+      "main": [
+        [
+          {
+            "node": "Pedir email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedir email": {
+      "main": [
+        [
+          {
+            "node": "Validar email1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar email": {
+      "main": [
+        [
+          {
+            "node": "Resumen de datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumen de datos": {
+      "main": [
+        [
+          {
+            "node": "Confirmar datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar datos": {
+      "main": [
+        [
+          {
+            "node": "Buscar participante1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar participante1": {
+      "main": [
+        [
+          {
+            "node": "Pedir Foto1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar email1": {
+      "main": [
+        [
+          {
+            "node": "Guardar email",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Session Update",
+            "node": "Correo invalido",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Email Validator": {
+    "Analyze Image": {
       "main": [
         [
           {
-            "node": "Session Update",
+            "node": "Parse Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Text": {
+      "main": [
+        []
+      ]
+    },
+    "Guardar foto": {
+      "main": [
+        [
+          {
+            "node": "POST /photos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar sesión": {
+      "main": [
+        [
+          {
+            "node": "¿Existe sesión?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Existe sesión?": {
+      "main": [
+        [
+          {
+            "node": "Crear sesión",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Session Update",
+            "node": "Leer Step",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Confirmation Handler": {
+    "Crear sesión": {
       "main": [
         [
           {
-            "node": "Register Participant",
+            "node": "Bienvenida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bienvenida": {
+      "main": [
+        [
+          {
+            "node": "Esperar Teléfono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar": {
+      "main": [
+        [
+          {
+            "node": "Buscar participante",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Session Update",
+            "node": "Insert row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar Teléfono": {
+      "main": [
+        [
+          {
+            "node": "Validar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer Step": {
+      "main": [
+        [
+          {
+            "node": "Switch(step)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedir Foto": {
+      "main": [
+        [
+          {
+            "node": "Analyze Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Text1": {
+      "main": [
+        [
+          {
+            "node": "¿Factura legible?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedir Foto1": {
+      "main": [
+        [
+          {
+            "node": "GPT Vision OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST /photos": {
+      "main": [
+        [
+          {
+            "node": "🎉 Ganaste puntos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT Vision OCR": {
+      "main": [
+        [
+          {
+            "node": "Parse Text1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Factura legible?": {
+      "main": [
+        [
+          {
+            "node": "Guardar foto",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Message Builder",
+            "node": "Pedir nueva foto",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Register Participant": {
+    "🎉 Ganaste puntos": {
       "main": [
         [
           {
-            "node": "Registration Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Download WhatsApp Media": {
-      "main": [
-        [
-          {
-            "node": "Rename Binary",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Upload Ticket API": {
-      "main": [
-        [
-          {
-            "node": "Upload Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Process Invoice": {
-      "main": [
-        [
-          {
-            "node": "Invoice Validator",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Invoice Validator": {
-      "main": [
-        [
-          {
-            "node": "Register Purchase",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Register Purchase": {
-      "main": [
-        [
-          {
-            "node": "Purchase Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Accept Entry": {
-      "main": [
-        [
-          {
-            "node": "Entry Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Points Builder": {
-      "main": [
-        [
-          {
-            "node": "Format Log Entry",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Format Log Entry": {
-      "main": [
-        [
-          {
-            "node": "Log to Sheets",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Log to Sheets": {
-      "main": [
-        [
-          {
-            "node": "Message Builder",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Rename Binary": {
-      "main": [
-        [
-          {
-            "node": "Upload Ticket API",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Message Builder": {
-      "main": [
-        [
-          {
-            "node": "Should Send WhatsApp",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send WhatsApp Message": {
-      "main": [
-        [
-          {
-            "node": "Respond Webhook OK",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "State Router": {
-      "main": [
-        [
-          {
-            "node": "Welcome Handler",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Phone Validator",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Name Handler",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Email Validator",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Confirmation Handler",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Search Participant",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Register Participant",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "WAIT_TICKET Router",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Message Builder",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Message Builder",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Message Builder",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Message Builder",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Message Builder",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Message Builder",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Message Builder",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Participant Exists": {
-      "main": [
-        [
-          {
-            "node": "Session Update",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Session Update",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Session Update",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Registration Result": {
-      "main": [
-        [
-          {
-            "node": "Session Update",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Session Update",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Session Update",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Upload Result": {
-      "main": [
-        [
-          {
-            "node": "Process Invoice",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Session Update",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Session Update",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Purchase Result": {
-      "main": [
-        [
-          {
-            "node": "Accept Entry",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Accept Entry",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Session Update",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Entry Result": {
-      "main": [
-        [
-          {
-            "node": "Points Builder",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Session Update",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "WAIT_TICKET Router": {
-      "main": [
-        [
-          {
-            "node": "Download WhatsApp Media",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Session Update",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Should Send WhatsApp": {
-      "main": [
-        [
-          {
-            "node": "Send WhatsApp Message",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respond Webhook OK",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Message Parser": {
-      "main": [
-        [
-          {
-            "node": "Session Loader",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Session Loader": {
-      "main": [
-        [
-          {
-            "node": "Session Load",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Merge Session",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Session Load": {
-      "main": [
-        [
-          {
-            "node": "Merge Session",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Merge Session": {
-      "main": [
-        [
-          {
-            "node": "Session Normalizer",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Session Normalizer": {
-      "main": [
-        [
-          {
-            "node": "State Router",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Session Update": {
-      "main": [
-        [
-          {
-            "node": "Flatten Session",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Message Builder",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Flatten Session": {
-      "main": [
-        [
-          {
-            "node": "Save Session",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Phone Validator": {
-      "main": [
-        [
-          {
-            "node": "Phone Valid?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Phone Valid?": {
-      "main": [
-        [
-          {
-            "node": "Search Participant",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Session Update",
+            "node": "step = completed",
             "type": "main",
             "index": 0
           }
@@ -1470,48 +2704,9 @@
       ]
     }
   },
-  "settings": {
-    "executionOrder": "v1",
-    "binaryMode": "separate",
-    "availableInMCP": true,
-    "timeSavedMode": "fixed",
-    "callerPolicy": "workflowsFromSameOwner"
-  },
-  "staticData": null,
-  "meta": {
-    "aiBuilderAssisted": true,
-    "builderVariant": "mcp"
-  },
-  "nodeGroups": [],
   "pinData": {},
-  "versionId": "ab85e43a-409c-4492-9867-52d223d5b403",
-  "activeVersionId": "c55e5f36-523a-4cef-b339-f23e54108d8e",
-  "versionCounter": 71,
-  "triggerCount": 1,
-  "sourceWorkflowId": null,
-  "tags": [],
-  "shared": [
-    {
-      "updatedAt": "2026-06-24T21:52:42.522Z",
-      "createdAt": "2026-06-24T21:52:42.522Z",
-      "role": "workflow:owner",
-      "workflowId": "geR3efpK8GTzUpTN",
-      "projectId": "t09IF6b1TWDe3im4",
-      "project": {
-        "updatedAt": "2026-06-24T15:17:15.775Z",
-        "createdAt": "2026-06-24T15:13:14.479Z",
-        "id": "t09IF6b1TWDe3im4",
-        "name": "Jorge jorgemaikelsierraamaya@gmail.com <jorgemaikelsierraamaya@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "e1c58465-8608-4194-bc13-15b515a53e11"
-      }
-    }
-  ],
-  "versionMetadata": {
-    "name": null,
-    "description": null
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cca5b06260766944c413e282cec0d1fe42468bf6ebf1048568362e98babb6a47"
   }
 }
