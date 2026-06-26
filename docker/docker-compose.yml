@@ -12,7 +12,7 @@ services:
       - N8N_PORT=${N8N_PORT:-5678}
       - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
       - N8N_SECURE_COOKIE=false
-      - WEBHOOK_URL=https://26a3-38-190-7-3.ngrok-free.app
+      - WEBHOOK_URL=https://98eb-38-190-7-3.ngrok-free.app
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
