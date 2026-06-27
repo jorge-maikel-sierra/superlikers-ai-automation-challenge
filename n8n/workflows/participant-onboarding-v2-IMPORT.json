@@ -1,544 +1,9 @@
 {
+  "name": "Participant Onboarding v1",
   "nodes": [
     {
       "parameters": {
-        "updates": [
-          "message"
-        ],
-        "additionalFields": {}
-      },
-      "type": "n8n-nodes-base.telegramTrigger",
-      "typeVersion": 1.3,
-      "position": [
-        -1392,
-        752
-      ],
-      "id": "8578e0c1-4abf-4333-8b14-bf3f26e84d55",
-      "name": "Telegram Trigger",
-      "webhookId": "16fe2f58-318b-47d4-b99f-31244cc2572c",
-      "credentials": {
-        "telegramApi": {
-          "id": "b4unBNxGc9bU0vnW",
-          "name": "Telegram account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "dataTableId": {
-          "__rl": true,
-          "value": "o6lmYpKmZj2F3a8y",
-          "mode": "list",
-          "cachedResultName": "superlikers_sessions",
-          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "points": 0,
-            "retry_count": 0,
-            "participant_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
-            "name": "={{ $('Telegram Trigger').item.json.message.chat.first_name }}",
-            "updated_at": "={{ $now }}",
-            "created_at": "={{ $today }}",
-            "step": "wait_phone",
-            "phone": "={{ $('Telegram Trigger').item.json.message.contact.phone_number }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "session_key",
-              "displayName": "session_key",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "phone",
-              "displayName": "phone",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "state",
-              "displayName": "state",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "name",
-              "displayName": "name",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "email",
-              "displayName": "email",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "participant_id",
-              "displayName": "participant_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "distinct_id",
-              "displayName": "distinct_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "entry_id",
-              "displayName": "entry_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "photo_id",
-              "displayName": "photo_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "photo_url",
-              "displayName": "photo_url",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "invoice_ref",
-              "displayName": "invoice_ref",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "invoice_data",
-              "displayName": "invoice_data",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "points",
-              "displayName": "points",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "retry_count",
-              "displayName": "retry_count",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "last_error",
-              "displayName": "last_error",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "updated_at",
-              "displayName": "updated_at",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "created_at",
-              "displayName": "created_at",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "step",
-              "displayName": "step",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "participant_exists",
-              "displayName": "participant_exists",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "boolean",
-              "readOnly": false,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        -304,
-        880
-      ],
-      "id": "89d4f218-7cb7-4db8-b1e5-52cbab876935",
-      "name": "Insert row"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
-            {
-              "id": "353bec75-5a6c-4a0c-994a-30f73d53a334",
-              "leftValue": "={{$json.object.email}}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        -160,
-        656
-      ],
-      "id": "33ec437a-bdda-4e12-8e08-349da32c99d7",
-      "name": "If",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
-        "text": "Necesito tu Nombre",
-        "additionalFields": {}
-      },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        192,
-        592
-      ],
-      "id": "6b70d858-6cf4-49f0-a50c-4fc4dd7f3aca",
-      "name": "Pedir nombre",
-      "webhookId": "392e88d5-de27-4e1d-b9dc-e910ef6d5913",
-      "credentials": {
-        "telegramApi": {
-          "id": "b4unBNxGc9bU0vnW",
-          "name": "Telegram account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "dataTableId": {
-          "__rl": true,
-          "value": "o6lmYpKmZj2F3a8y",
-          "mode": "list",
-          "cachedResultName": "superlikers_sessions",
-          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "points": 0,
-            "retry_count": 0,
-            "participant_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
-            "name": "={{ $('Telegram Trigger').item.json.message.chat.first_name }}",
-            "updated_at": "={{ $now }}",
-            "created_at": "={{ $today }}",
-            "step": "wait_phone",
-            "phone": "={{ $('Telegram Trigger').item.json.message.contact.phone_number }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "session_key",
-              "displayName": "session_key",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "phone",
-              "displayName": "phone",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "state",
-              "displayName": "state",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "name",
-              "displayName": "name",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "email",
-              "displayName": "email",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "participant_id",
-              "displayName": "participant_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "distinct_id",
-              "displayName": "distinct_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "entry_id",
-              "displayName": "entry_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "photo_id",
-              "displayName": "photo_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "photo_url",
-              "displayName": "photo_url",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "invoice_ref",
-              "displayName": "invoice_ref",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "invoice_data",
-              "displayName": "invoice_data",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "points",
-              "displayName": "points",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "retry_count",
-              "displayName": "retry_count",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "last_error",
-              "displayName": "last_error",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "updated_at",
-              "displayName": "updated_at",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "created_at",
-              "displayName": "created_at",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "step",
-              "displayName": "step",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "participant_exists",
-              "displayName": "participant_exists",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "boolean",
-              "readOnly": false,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        192,
-        752
-      ],
-      "id": "898ecd7b-6a3b-4f2a-bec4-fddca5888876",
-      "name": "Insertar distinct_id"
-    },
-    {
-      "parameters": {
-        "url": "https://api.superlikerslabs.com/v1/participants/search",
+        "url": "={{ $vars.SUPERLIKERS_BASE_URL + '/participants/search' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -550,622 +15,18 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"api_key\": \"8a728b9da584daac04ad176b03131dfe\",\n  \"campaign\": \"3z\",\n  \"query\": {\n    \"cellphone\": \"3187592616\"\n  }\n}",
+        "jsonBody": "={\n  \"api_key\": \"{{$vars.SUPERLIKERS_API_KEY}}\",\n  \"campaign\": \"{{$vars.SUPERLIKERS_CAMPAIGN}}\",\n  \"query\": {\n    \"cellphone\": {{ $('Edit Fields').item.json.phone }}\"\"\n  }\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        -304,
-        656
+        -1488,
+        736
       ],
       "id": "d8c7898d-0967-4e97-9fe8-baa84f222396",
       "name": "Buscar participante",
       "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "dataTableId": {
-          "__rl": true,
-          "value": "o6lmYpKmZj2F3a8y",
-          "mode": "list",
-          "cachedResultName": "superlikers_sessions",
-          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "participant_exists": false,
-            "name": "={{ $json.result.text }}",
-            "points": 0,
-            "retry_count": 0,
-            "participant_id": 0
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "session_key",
-              "displayName": "session_key",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "phone",
-              "displayName": "phone",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "state",
-              "displayName": "state",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "name",
-              "displayName": "name",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "email",
-              "displayName": "email",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "distinct_id",
-              "displayName": "distinct_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "entry_id",
-              "displayName": "entry_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "photo_id",
-              "displayName": "photo_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "photo_url",
-              "displayName": "photo_url",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "invoice_ref",
-              "displayName": "invoice_ref",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "invoice_data",
-              "displayName": "invoice_data",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "points",
-              "displayName": "points",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "retry_count",
-              "displayName": "retry_count",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "last_error",
-              "displayName": "last_error",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "updated_at",
-              "displayName": "updated_at",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "created_at",
-              "displayName": "created_at",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "step",
-              "displayName": "step",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "participant_exists",
-              "displayName": "participant_exists",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "boolean",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "participant_id",
-              "displayName": "participant_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        336,
-        592
-      ],
-      "id": "d1cfd03f-eb35-424b-91f4-4545b00b4d1c",
-      "name": "Guardar nombre"
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
-        "text": "Necesito tu Email",
-        "additionalFields": {}
-      },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        480,
-        592
-      ],
-      "id": "7980159c-ce54-4481-b2dd-e1bb797a0337",
-      "name": "Pedir email",
-      "webhookId": "392e88d5-de27-4e1d-b9dc-e910ef6d5913",
-      "credentials": {
-        "telegramApi": {
-          "id": "b4unBNxGc9bU0vnW",
-          "name": "Telegram account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "dataTableId": {
-          "__rl": true,
-          "value": "o6lmYpKmZj2F3a8y",
-          "mode": "list",
-          "cachedResultName": "superlikers_sessions",
-          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "participant_exists": false,
-            "name": "=",
-            "points": 0,
-            "retry_count": 0,
-            "participant_id": 0,
-            "email": "={{ $json.result.text }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "session_key",
-              "displayName": "session_key",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "phone",
-              "displayName": "phone",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "state",
-              "displayName": "state",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "name",
-              "displayName": "name",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "email",
-              "displayName": "email",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "distinct_id",
-              "displayName": "distinct_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "entry_id",
-              "displayName": "entry_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "photo_id",
-              "displayName": "photo_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "photo_url",
-              "displayName": "photo_url",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "invoice_ref",
-              "displayName": "invoice_ref",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "invoice_data",
-              "displayName": "invoice_data",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "points",
-              "displayName": "points",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "retry_count",
-              "displayName": "retry_count",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "last_error",
-              "displayName": "last_error",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "updated_at",
-              "displayName": "updated_at",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "created_at",
-              "displayName": "created_at",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "step",
-              "displayName": "step",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "participant_exists",
-              "displayName": "participant_exists",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "boolean",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "participant_id",
-              "displayName": "participant_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        800,
-        352
-      ],
-      "id": "57d68f6f-8671-48f4-8136-f39d4518e52e",
-      "name": "Guardar email"
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $('Guardar email').item.json.id }}",
-        "text": "Confirma datos",
-        "additionalFields": {}
-      },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        944,
-        352
-      ],
-      "id": "4033b79d-7e7f-4184-976d-11080b9031de",
-      "name": "Resumen de datos",
-      "webhookId": "712cae68-d568-472f-9acb-ff96045981be",
-      "credentials": {
-        "telegramApi": {
-          "id": "b4unBNxGc9bU0vnW",
-          "name": "Telegram account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "sendChatAction",
-        "chatId": "={{ $json.result.chat.id }}",
-        "action": "record_video_note"
-      },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1088,
-        352
-      ],
-      "id": "2f14f9be-84ef-48c5-8dd5-fddda8c6d1af",
-      "name": "Confirmar datos",
-      "webhookId": "6c682dec-d994-42b2-a210-80e70ebafba0",
-      "credentials": {
-        "telegramApi": {
-          "id": "b4unBNxGc9bU0vnW",
-          "name": "Telegram account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.superlikerslabs.com/v1/participants",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer 8a728b9da584daac04ad176b03131dfe"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"api_key\": \"8a728b9da584daac04ad176b03131dfe\",\n  \"campaign\": \"3z\",\n  \"query\": {\n    \"cellphone\": \"3187592616\"\n  }\n}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
-        1232,
-        352
-      ],
-      "id": "f4a048bf-52d6-4de5-93d6-95c3d69e3f6d",
-      "name": "Buscar participante1",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
-            {
-              "id": "353bec75-5a6c-4a0c-994a-30f73d53a334",
-              "leftValue": "={{$json.object.email}}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        624,
-        592
-      ],
-      "id": "c1ed8098-8b7d-4894-a34d-12b8a90eea86",
-      "name": "Validar email1",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
-        "text": "Verifica tu correo",
-        "additionalFields": {}
-      },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        800,
-        592
-      ],
-      "id": "e37d98ab-3373-4ead-aa94-2521a2f823c9",
-      "name": "Correo invalido",
-      "webhookId": "392e88d5-de27-4e1d-b9dc-e910ef6d5913",
-      "credentials": {
-        "telegramApi": {
-          "id": "b4unBNxGc9bU0vnW",
-          "name": "Telegram account"
-        }
-      }
     },
     {
       "parameters": {
@@ -1197,8 +58,8 @@
       "name": "Analyze Image",
       "type": "n8n-nodes-base.httpRequest",
       "position": [
-        496,
-        752
+        -704,
+        720
       ],
       "typeVersion": 4.2
     },
@@ -1210,32 +71,10 @@
       "name": "Parse Text",
       "type": "n8n-nodes-base.code",
       "position": [
-        640,
-        752
+        -512,
+        720
       ],
       "typeVersion": 2
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $(\"Telegram Trigger\").item.json.message.chat.id }}",
-        "text": "=Pásame otra foto",
-        "additionalFields": {}
-      },
-      "id": "a1e214f9-5fb6-4a3a-be64-c265d966bf01",
-      "name": "Pedir nueva foto",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        2192,
-        480
-      ],
-      "webhookId": "56f1c733-7ccb-43a3-ad9f-0192118b9992",
-      "credentials": {
-        "telegramApi": {
-          "id": "b4unBNxGc9bU0vnW",
-          "name": "Telegram account"
-        }
-      }
     },
     {
       "parameters": {
@@ -1258,8 +97,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        2192,
-        288
+        -400,
+        384
       ],
       "id": "d52d47a6-19b4-4fd9-9f12-d0a74f4f89d0",
       "name": "Guardar foto",
@@ -1267,35 +106,6 @@
     },
     {
       "parameters": {
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "o6lmYpKmZj2F3a8y",
-          "mode": "list",
-          "cachedResultName": "superlikers_sessions",
-          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
-        },
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "participant_id",
-              "keyValue": "={{ $json.message.chat.id }}"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        -1264,
-        752
-      ],
-      "id": "c94f6f36-6f03-42dc-97f3-78f074b26a1b",
-      "name": "Buscar sesión",
-      "alwaysOutputData": true
-    },
-    {
-      "parameters": {
         "rules": {
           "values": [
             {
@@ -1308,17 +118,19 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.participant_exists }}",
-                    "rightValue": "={{ $('Telegram Trigger').item.json.message.reply_to_message.from.id }}",
+                    "leftValue": "={{ $json.step }}",
+                    "rightValue": "=wait_phone",
                     "operator": {
-                      "type": "number",
+                      "type": "string",
                       "operation": "equals"
                     },
                     "id": "734b4482-b247-4b65-98ad-50198fcf9e11"
                   }
                 ],
                 "combinator": "and"
-              }
+              },
+              "renameOutput": true,
+              "outputKey": "Nombre"
             },
             {
               "conditions": {
@@ -1330,18 +142,44 @@
                 },
                 "conditions": [
                   {
-                    "id": "dd3329d1-fdb1-4725-ab82-08d51236b634",
-                    "leftValue": "={{ $json.participant_id }}",
-                    "rightValue": "",
+                    "id": "d15f0f6d-e18c-408c-b738-263978453d74",
+                    "leftValue": "={{ $json.step }}",
+                    "rightValue": "wait_email",
                     "operator": {
-                      "type": "number",
-                      "operation": "empty",
-                      "singleValue": true
+                      "type": "string",
+                      "operation": "equals"
                     }
                   }
                 ],
                 "combinator": "and"
-              }
+              },
+              "renameOutput": true,
+              "outputKey": "Email"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "68a4b51f-f26b-40b1-bc40-f5393ba5bd92",
+                    "leftValue": "={{ $json.step }}",
+                    "rightValue": "wait_confirm",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Confirmar datos"
             }
           ]
         },
@@ -1350,620 +188,11 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        -1120,
-        752
+        -1808,
+        544
       ],
       "id": "80681695-1017-4ad0-b1f9-7879365c93d6",
       "name": "¿Existe sesión?"
-    },
-    {
-      "parameters": {
-        "dataTableId": {
-          "__rl": true,
-          "value": "o6lmYpKmZj2F3a8y",
-          "mode": "list",
-          "cachedResultName": "superlikers_sessions",
-          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "participant_exists": false,
-            "participant_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
-            "points": 0,
-            "retry_count": 0
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "session_key",
-              "displayName": "session_key",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "phone",
-              "displayName": "phone",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "state",
-              "displayName": "state",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "name",
-              "displayName": "name",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "email",
-              "displayName": "email",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "distinct_id",
-              "displayName": "distinct_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "entry_id",
-              "displayName": "entry_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "photo_id",
-              "displayName": "photo_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "photo_url",
-              "displayName": "photo_url",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "invoice_ref",
-              "displayName": "invoice_ref",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "invoice_data",
-              "displayName": "invoice_data",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "points",
-              "displayName": "points",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "retry_count",
-              "displayName": "retry_count",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "last_error",
-              "displayName": "last_error",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "updated_at",
-              "displayName": "updated_at",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "created_at",
-              "displayName": "created_at",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "step",
-              "displayName": "step",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "participant_exists",
-              "displayName": "participant_exists",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "boolean",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "participant_id",
-              "displayName": "participant_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        -896,
-        672
-      ],
-      "id": "ad808e9d-4264-42af-a46c-88d3ca276853",
-      "name": "Crear sesión"
-    },
-    {
-      "parameters": {
-        "resource": "chat",
-        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
-      },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        -752,
-        672
-      ],
-      "id": "5b9636e6-5664-4465-bb4a-41082b0b6ee9",
-      "name": "Bienvenida",
-      "webhookId": "b5ea4b04-b6db-4804-a8b1-4d9d2e817ecf",
-      "alwaysOutputData": true,
-      "credentials": {
-        "telegramApi": {
-          "id": "b4unBNxGc9bU0vnW",
-          "name": "Telegram account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 1
-          },
-          "conditions": [
-            {
-              "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-              "leftValue": "={{\n  /^57(3\\d{9})$/.test(\n    ($json.message.contact?.phone_number ?? $json.message.text ?? \"\")\n      .replace(/\\D/g, \"\")\n  )\n}}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "12d867e0-fd93-4f06-8b05-9aa058bca20b",
-      "name": "Validar",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        -464,
-        672
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.telegram.org/bot8994667126:AAELpj80MEEEI7FHTutjP0KyO9O7GQ8-MuY/sendMessage",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"chat_id\": \"{{$json.result.id}}\",\n  \"text\": \"¡Hola! 👋 Bienvenido a la campaña. Para empezar, escríbeme tu número de celular (solo números).\",\n  \"reply_markup\": {\n    \"keyboard\": [\n      [\n        {\n          \"text\": \"📱 Compartir teléfono\",\n          \"request_contact\": true\n        }\n      ]\n    ],\n    \"resize_keyboard\": true,\n    \"one_time_keyboard\": true\n  }\n}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
-        -608,
-        672
-      ],
-      "id": "2e635335-25d5-4683-a4a5-90fb01defc69",
-      "name": "Esperar Teléfono"
-    },
-    {
-      "parameters": {
-        "dataTableId": {
-          "__rl": true,
-          "value": "o6lmYpKmZj2F3a8y",
-          "mode": "list",
-          "cachedResultName": "superlikers_sessions",
-          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "points": 0,
-            "retry_count": 0,
-            "participant_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
-            "name": "={{ $('Telegram Trigger').item.json.message.chat.first_name }}",
-            "updated_at": "={{ $now }}",
-            "created_at": "={{ $today }}",
-            "step": "wait_phone",
-            "phone": "={{ $('Telegram Trigger').item.json.message.contact.phone_number }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "session_key",
-              "displayName": "session_key",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "phone",
-              "displayName": "phone",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "state",
-              "displayName": "state",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "name",
-              "displayName": "name",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "email",
-              "displayName": "email",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "participant_id",
-              "displayName": "participant_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "distinct_id",
-              "displayName": "distinct_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "entry_id",
-              "displayName": "entry_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "photo_id",
-              "displayName": "photo_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "photo_url",
-              "displayName": "photo_url",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "invoice_ref",
-              "displayName": "invoice_ref",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "invoice_data",
-              "displayName": "invoice_data",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "points",
-              "displayName": "points",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "retry_count",
-              "displayName": "retry_count",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "last_error",
-              "displayName": "last_error",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "updated_at",
-              "displayName": "updated_at",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "created_at",
-              "displayName": "created_at",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "step",
-              "displayName": "step",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "participant_exists",
-              "displayName": "participant_exists",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "boolean",
-              "readOnly": false,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [
-        -896,
-        848
-      ],
-      "id": "596d564f-6a11-4cda-9286-006f1754b693",
-      "name": "Leer Step"
-    },
-    {
-      "parameters": {
-        "rules": {
-          "values": [
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 3
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.participant_exists }}",
-                    "rightValue": "={{ $('Telegram Trigger').item.json.message.reply_to_message.from.id }}",
-                    "operator": {
-                      "type": "number",
-                      "operation": "equals"
-                    },
-                    "id": "734b4482-b247-4b65-98ad-50198fcf9e11"
-                  }
-                ],
-                "combinator": "and"
-              }
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 3
-                },
-                "conditions": [
-                  {
-                    "id": "dd3329d1-fdb1-4725-ab82-08d51236b634",
-                    "leftValue": "={{ $json.participant_id }}",
-                    "rightValue": "",
-                    "operator": {
-                      "type": "number",
-                      "operation": "empty",
-                      "singleValue": true
-                    }
-                  }
-                ],
-                "combinator": "and"
-              }
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.4,
-      "position": [
-        -736,
-        848
-      ],
-      "id": "e7c73dc8-7ca4-4a99-bb82-97447480576a",
-      "name": "Switch(step)"
-    },
-    {
-      "parameters": {
-        "resource": "file",
-        "fileId": "={{ $json.message.photo[$json.message.photo.length - 1].file_id }}",
-        "additionalFields": {}
-      },
-      "id": "3cc28103-6fff-4d06-a9cd-b87055d3be27",
-      "name": "Pedir Foto",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        352,
-        752
-      ],
-      "webhookId": "8c2e9cc6-18b2-42b6-87f5-5f23e7633ce1",
-      "credentials": {
-        "telegramApi": {
-          "id": "b4unBNxGc9bU0vnW",
-          "name": "Telegram account"
-        }
-      }
     },
     {
       "parameters": {
@@ -1973,32 +202,10 @@
       "name": "Parse Text1",
       "type": "n8n-nodes-base.code",
       "position": [
-        1728,
-        352
+        -912,
+        576
       ],
       "typeVersion": 2
-    },
-    {
-      "parameters": {
-        "resource": "file",
-        "fileId": "={{ $json.message.photo[$json.message.photo.length - 1].file_id }}",
-        "additionalFields": {}
-      },
-      "id": "1be5c057-2072-4e2b-a649-741d65bca668",
-      "name": "Pedir Foto1",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1408,
-        352
-      ],
-      "webhookId": "8c2e9cc6-18b2-42b6-87f5-5f23e7633ce1",
-      "credentials": {
-        "telegramApi": {
-          "id": "b4unBNxGc9bU0vnW",
-          "name": "Telegram account"
-        }
-      }
     },
     {
       "parameters": {
@@ -2021,8 +228,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        2352,
-        288
+        -208,
+        384
       ],
       "id": "2aff9317-0abf-4e29-bb8c-e8ca4e6b598a",
       "name": "POST /photos",
@@ -2058,8 +265,8 @@
       "name": "GPT Vision OCR",
       "type": "n8n-nodes-base.httpRequest",
       "position": [
-        1584,
-        352
+        -1104,
+        576
       ],
       "typeVersion": 4.2
     },
@@ -2091,34 +298,12 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1904,
-        352
+        -720,
+        560
       ],
       "id": "ce9f92a6-7b07-4b14-9631-d761dc1e8f72",
       "name": "¿Factura legible?",
       "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $(\"Telegram Trigger\").item.json.message.chat.id }}",
-        "text": "=🎉 Ganaste 250 puntos",
-        "additionalFields": {}
-      },
-      "id": "3e73e1ac-baa4-4e66-b89f-2ab464318dbe",
-      "name": "🎉 Ganaste puntos",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        2528,
-        288
-      ],
-      "webhookId": "56f1c733-7ccb-43a3-ad9f-0192118b9992",
-      "credentials": {
-        "telegramApi": {
-          "id": "b4unBNxGc9bU0vnW",
-          "name": "Telegram account"
-        }
-      }
     },
     {
       "parameters": {
@@ -2342,159 +527,1018 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        2688,
-        288
+        160,
+        384
       ],
       "id": "00a86f55-8970-4ccd-8abb-0f650ffd9a4d",
       "name": "step = completed"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "twilio-whatsapp",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2640,
+        672
+      ],
+      "id": "3421023a-fe7c-45bb-a09d-bc226622daaf",
+      "name": "Webhook",
+      "webhookId": "3a9af573-6698-4ef5-8da1-d76971ceeaf5"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1fcabff-341f-46b9-945c-493002200700",
+              "name": "phone",
+              "value": "={{ $json.body.From.replace('whatsapp:+57','') }}",
+              "type": "string"
+            },
+            {
+              "id": "c74540ee-b868-4959-8864-1f99ceeae26f",
+              "name": "phone_e164",
+              "value": "={{ $json.body.From }}",
+              "type": "string"
+            },
+            {
+              "id": "a228ee55-2837-41f2-a071-0baa477da5d8",
+              "name": "message",
+              "value": "={{ $json.body.Body }}",
+              "type": "string"
+            },
+            {
+              "id": "7ee68049-8c28-415c-a3e2-3ae948bdb682",
+              "name": "profile_name",
+              "value": "={{ $json.body.ProfileName }}",
+              "type": "string"
+            },
+            {
+              "id": "5fbe1ea3-ea4c-4e6b-bc5e-fe3630cb5c7e",
+              "name": "media_count",
+              "value": "={{ $json.body.ReferralNumMedia }}",
+              "type": "string"
+            },
+            {
+              "id": "387291a1-521d-42fe-9e88-03672b263aa4",
+              "name": "media_url",
+              "value": "={{ $json.webhookUrl }}",
+              "type": "string"
+            },
+            {
+              "id": "f9e95a92-d39b-4c87-af62-78a77b7dbfe5",
+              "name": "message_sid",
+              "value": "={{ $json.body.SmsMessageSid }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2480,
+        672
+      ],
+      "id": "184deeba-bef1-4d2b-8579-2150ba75185e",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "operation": "rowExists",
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "keyValue": "={{ $json.phone }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -2336,
+        672
+      ],
+      "id": "596d564f-6a11-4cda-9286-006f1754b693",
+      "name": "Buscar sesion",
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+              "leftValue": "={{ $json.phone }}",
+              "rightValue": "={{ $('Edit Fields').item.json.phone }}",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "029dd86d-7206-4b5e-a103-79f1d0feec95",
+      "name": "Validar3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2192,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $('Webhook').item.json.body.WaId }}",
+        "toWhatsapp": true,
+        "message": "¡Hola! 👋 Bienvenido a la campaña. Para empezar, escríbeme tu nombre.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -1648,
+        736
+      ],
+      "id": "215baebd-fe30-4bbb-8f74-4776b81dfaea",
+      "name": "Dame tu nombre",
+      "credentials": {
+        "twilioApi": {
+          "id": "s6G3smszZcrigSC7",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Edit Fields').item.json.phone }}",
+            "step": "wait_phone",
+            "distinct_id": 0,
+            "points": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distinct_id",
+              "displayName": "distinct_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_id",
+              "displayName": "photo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_ref",
+              "displayName": "invoice_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "points",
+              "displayName": "points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1808,
+        736
+      ],
+      "id": "a3b96ac6-5afe-432e-9394-5440e3ad8e39",
+      "name": "Guardar telefono",
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+              "leftValue": "={{\n/^\\d{10}$/.test($('Edit Fields').item.json.phone)\n}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d760fb86-d9c7-42fc-9e0b-c2d67629288b",
+      "name": "Validar phone 10",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2000,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
+        },
+        "matchType": "allConditions"
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1952,
+        544
+      ],
+      "id": "272d894f-41a1-4a36-8515-e623e4a63f67",
+      "name": "Buscar sesion2",
+      "alwaysOutputData": false,
+      "executeOnce": false,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "step",
+              "keyValue": "wait_phone"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": 0,
+            "distinct_id": 0,
+            "points": 0,
+            "name": "={{ $('Edit Fields').item.json.message }}",
+            "step": "wait_name"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distinct_id",
+              "displayName": "distinct_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_id",
+              "displayName": "photo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_ref",
+              "displayName": "invoice_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "points",
+              "displayName": "points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1472,
+        128
+      ],
+      "id": "8e7e2c31-11ad-455f-9921-010b3af26df3",
+      "name": "Guardar nombre1",
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $('Webhook').item.json.body.WaId }}",
+        "toWhatsapp": true,
+        "message": "Dame tu Email.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -1312,
+        128
+      ],
+      "id": "635fceda-085e-4a77-80ab-76017bf0382e",
+      "name": "Dame tu email.",
+      "credentials": {
+        "twilioApi": {
+          "id": "s6G3smszZcrigSC7",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $('Webhook').item.json.body.WaId }}",
+        "toWhatsapp": true,
+        "message": "Dame tu Email.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -1472,
+        416
+      ],
+      "id": "1a40ae2c-c68f-4c86-90b4-7be0f25f0242",
+      "name": "Dame tu email.1",
+      "credentials": {
+        "twilioApi": {
+          "id": "s6G3smszZcrigSC7",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "step",
+              "keyValue": "wait_email"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": 0,
+            "distinct_id": 0,
+            "points": 0,
+            "name": "=",
+            "step": "wait_email",
+            "email": "={{ $('Edit Fields').item.json.message }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distinct_id",
+              "displayName": "distinct_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_id",
+              "displayName": "photo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_ref",
+              "displayName": "invoice_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "points",
+              "displayName": "points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1632,
+        416
+      ],
+      "id": "4f53630a-7029-4162-b0bc-94cf46dc1674",
+      "name": "Guardar email1",
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "o6lmYpKmZj2F3a8y",
+          "mode": "list",
+          "cachedResultName": "superlikers_sessions",
+          "cachedResultUrl": "/projects/jAePvWaIZN1495Dv/datatables/o6lmYpKmZj2F3a8y"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "keyValue": "={{ $('Edit Fields').item.json.phone }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "=",
+            "step": "wait_name",
+            "distinct_id": 0,
+            "points": 0,
+            "name": "="
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distinct_id",
+              "displayName": "distinct_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "photo_id",
+              "displayName": "photo_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "invoice_ref",
+              "displayName": "invoice_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "points",
+              "displayName": "points",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1072,
+        720
+      ],
+      "id": "182b57cf-9693-4557-b242-a645533e9e14",
+      "name": "Guardar distinct_id",
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+              "leftValue": "={{ $json.phone }}",
+              "rightValue": "={{ $('Edit Fields').item.json.phone }}",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2cc10ce3-fdad-4467-8af3-e5a291b1231d",
+      "name": "Validar si existe",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1312,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $('Webhook').item.json.body.WaId }}",
+        "toWhatsapp": true,
+        "message": "El campo esta vacio",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -1472,
+        272
+      ],
+      "id": "cf1730fd-347d-41cf-812d-91273acd7f2a",
+      "name": "Campo vacio",
+      "credentials": {
+        "twilioApi": {
+          "id": "s6G3smszZcrigSC7",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+              "leftValue": "={{ !$('Edit Fields').item.json.message }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9ac857c0-439d-43ca-ae96-5d7a83fbcbb9",
+      "name": "Validar campo vacio",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1632,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $('Webhook').item.json.body.WaId }}",
+        "toWhatsapp": true,
+        "message": "Confirmemos: Nombre: Juan Pérez, Celular: 3001234567, Correo: juan@mail.com. ¿Es correcto? Responde SÍ para continuar.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -1616,
+        576
+      ],
+      "id": "33369a46-075b-479c-a6ce-0b51b08b361f",
+      "name": "Confirmar datos1",
+      "credentials": {
+        "twilioApi": {
+          "id": "s6G3smszZcrigSC7",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $vars.SUPERLIKERS_BASE_URL + '/participants' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 8a728b9da584daac04ad176b03131dfe"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"api_key\": \"{{$vars.SUPERLIKERS_API_KEY}}\",\n  \"campaign\": \"{{$vars.SUPERLIKERS_CAMPAIGN}}\",\n  \"query\": {\n    \"cellphone\": {{ $('Edit Fields').item.json.phone }}\"\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1472,
+        576
+      ],
+      "id": "238951ab-99ad-40b2-89fd-7ebc4c010b16",
+      "name": "Registrar participante",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $('Webhook').item.json.body.WaId }}",
+        "toWhatsapp": true,
+        "message": "Dame tu Email.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -896,
+        720
+      ],
+      "id": "a6ca675c-f748-4ee6-93ba-6ecdb802fd6e",
+      "name": "Pedir foto",
+      "credentials": {
+        "twilioApi": {
+          "id": "s6G3smszZcrigSC7",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $('Webhook').item.json.body.WaId }}",
+        "toWhatsapp": true,
+        "message": "Envia la foto del tikect.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -1312,
+        576
+      ],
+      "id": "f6fa7a61-cb85-4ad5-bf94-f6426d952857",
+      "name": "Pedir foto1",
+      "credentials": {
+        "twilioApi": {
+          "id": "s6G3smszZcrigSC7",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $('Webhook').item.json.body.WaId }}",
+        "toWhatsapp": true,
+        "message": "Dame tu Email.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        544
+      ],
+      "id": "3048b9b3-56f4-42f9-9dc1-a36a7972dc9c",
+      "name": "Pedir nueva foto",
+      "credentials": {
+        "twilioApi": {
+          "id": "s6G3smszZcrigSC7",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "={{ $('Webhook').item.json.body.WaId }}",
+        "toWhatsapp": true,
+        "message": "Dame tu Email.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        384
+      ],
+      "id": "2cf798dd-0b6b-4036-b7a6-e21989522105",
+      "name": "🎉 Ganaste puntos1",
+      "credentials": {
+        "twilioApi": {
+          "id": "s6G3smszZcrigSC7",
+          "name": "Twilio account"
+        }
+      }
     }
   ],
+  "pinData": {},
   "connections": {
-    "Telegram Trigger": {
-      "main": [
-        [
-          {
-            "node": "Buscar sesión",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Insert row": {
-      "main": [
-        []
-      ]
-    },
-    "If": {
-      "main": [
-        [
-          {
-            "node": "Pedir nombre",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Insertar distinct_id",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Pedir nombre": {
-      "main": [
-        [
-          {
-            "node": "Guardar nombre",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Insertar distinct_id": {
-      "main": [
-        [
-          {
-            "node": "Pedir Foto",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Buscar participante": {
       "main": [
         [
           {
-            "node": "If",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Guardar nombre": {
-      "main": [
-        [
-          {
-            "node": "Pedir email",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Pedir email": {
-      "main": [
-        [
-          {
-            "node": "Validar email1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Guardar email": {
-      "main": [
-        [
-          {
-            "node": "Resumen de datos",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Resumen de datos": {
-      "main": [
-        [
-          {
-            "node": "Confirmar datos",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Confirmar datos": {
-      "main": [
-        [
-          {
-            "node": "Buscar participante1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Buscar participante1": {
-      "main": [
-        [
-          {
-            "node": "Pedir Foto1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Validar email1": {
-      "main": [
-        [
-          {
-            "node": "Guardar email",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Correo invalido",
+            "node": "Validar si existe",
             "type": "main",
             "index": 0
           }
@@ -2528,102 +1572,25 @@
         ]
       ]
     },
-    "Buscar sesión": {
-      "main": [
-        [
-          {
-            "node": "¿Existe sesión?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "¿Existe sesión?": {
       "main": [
         [
           {
-            "node": "Crear sesión",
+            "node": "Validar campo vacio",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Leer Step",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Crear sesión": {
-      "main": [
-        [
-          {
-            "node": "Bienvenida",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Bienvenida": {
-      "main": [
-        [
-          {
-            "node": "Esperar Teléfono",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Validar": {
-      "main": [
-        [
-          {
-            "node": "Buscar participante",
+            "node": "Guardar email1",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Insert row",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Esperar Teléfono": {
-      "main": [
-        [
-          {
-            "node": "Validar",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Leer Step": {
-      "main": [
-        [
-          {
-            "node": "Switch(step)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Pedir Foto": {
-      "main": [
-        [
-          {
-            "node": "Analyze Image",
+            "node": "Confirmar datos1",
             "type": "main",
             "index": 0
           }
@@ -2641,11 +1608,11 @@
         ]
       ]
     },
-    "Pedir Foto1": {
+    "GPT Vision OCR": {
       "main": [
         [
           {
-            "node": "GPT Vision OCR",
+            "node": "Parse Text1",
             "type": "main",
             "index": 0
           }
@@ -2656,18 +1623,7 @@
       "main": [
         [
           {
-            "node": "🎉 Ganaste puntos",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "GPT Vision OCR": {
-      "main": [
-        [
-          {
-            "node": "Parse Text1",
+            "node": "🎉 Ganaste puntos1",
             "type": "main",
             "index": 0
           }
@@ -2692,7 +1648,221 @@
         ]
       ]
     },
-    "🎉 Ganaste puntos": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Buscar sesion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar sesion": {
+      "main": [
+        [
+          {
+            "node": "Validar3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar3": {
+      "main": [
+        [
+          {
+            "node": "Buscar sesion2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar phone 10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dame tu nombre": {
+      "main": [
+        [
+          {
+            "node": "Buscar participante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar telefono": {
+      "main": [
+        [
+          {
+            "node": "Dame tu nombre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar phone 10": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Guardar telefono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar sesion2": {
+      "main": [
+        [
+          {
+            "node": "¿Existe sesión?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar nombre1": {
+      "main": [
+        [
+          {
+            "node": "Dame tu email.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dame tu email.": {
+      "main": [
+        []
+      ]
+    },
+    "Guardar email1": {
+      "main": [
+        [
+          {
+            "node": "Dame tu email.1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar si existe": {
+      "main": [
+        [
+          {
+            "node": "Guardar distinct_id",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Existe sesión?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar campo vacio": {
+      "main": [
+        [
+          {
+            "node": "Guardar nombre1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Campo vacio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar datos1": {
+      "main": [
+        [
+          {
+            "node": "Registrar participante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar participante": {
+      "main": [
+        [
+          {
+            "node": "Pedir foto1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar distinct_id": {
+      "main": [
+        [
+          {
+            "node": "Pedir foto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedir foto": {
+      "main": [
+        [
+          {
+            "node": "Analyze Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedir foto1": {
+      "main": [
+        [
+          {
+            "node": "GPT Vision OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎉 Ganaste puntos1": {
       "main": [
         [
           {
@@ -2704,9 +1874,18 @@
       ]
     }
   },
-  "pinData": {},
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "5408f7c1-c7ab-4064-9fe6-4f1942dba9b7",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "cca5b06260766944c413e282cec0d1fe42468bf6ebf1048568362e98babb6a47"
-  }
+  },
+  "nodeGroups": [],
+  "id": "Uymu63xFJtVcCq7r",
+  "tags": []
 }
